@@ -47,7 +47,7 @@ def create_functionalUnit(object_list, action_verb):
 
     return functionalUnit
 
-def create_olp_functionalUnit(plan_step):
+def create_olp_functionalUnit(plan_step,plan_objects):
     functionalUnit = fga.FOON.FunctionalUnit()
    
     step_objects = plan_step['Objects']
@@ -69,7 +69,9 @@ def create_olp_functionalUnit(plan_step):
             current_state_effects = object_state_changes[state_type]
             
             for state_effect in current_state_effects:
-                related_obj = [obj for obj in step_objects if obj in state_effect] #check if state effect involves another object in step
+                related_obj = [obj for obj in plan_objects if obj in state_effect] #check if state effect involves another object in step
+                if related_obj!=[]:
+                    state_effect = state_effect.replace(related_obj[0],"")
                 if "contains" in state_effect:
                     new_object.addNewState([None, state_effect , None]) #add each state effect to object node
                     if related_obj!=[]: 
