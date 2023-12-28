@@ -59,7 +59,6 @@ def create_olp_functionalUnit(plan_step,plan_objects):
     for object in step_objects:
         #create object node 
         print("Current object is :", object)
-        new_object = fga.FOON.Object(objectLabel=object)
 
         #check object state changes in step
         object_state_changes = plan_step['StateChanges'][object]
@@ -67,6 +66,8 @@ def create_olp_functionalUnit(plan_step,plan_objects):
 
         for state_type in ['Precondition', 'Effect']:
             current_state_effects = object_state_changes[state_type]
+    
+            new_object = fga.FOON.Object(objectLabel=object)
             
             for state_effect in current_state_effects:
                 related_obj = [obj for obj in plan_objects if obj in state_effect] #check if state effect involves another object in step

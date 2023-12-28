@@ -612,7 +612,7 @@ class RecursivePrompter:
                     }                
                 response = prompt_LLM(prompt=reminder)
                 input(response)
-
+ 
                 # -- we should formulate prompts for each object:
                 for obj in necessary_objs:
                     prompt_for_state = {
