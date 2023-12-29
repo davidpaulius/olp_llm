@@ -1,0 +1,71 @@
+#	FOON Prototype
+#	-- Task Prompt: How do I make coffee?
+//
+O0	kettle	0
+S0	empty
+O0	water	0
+S0	free
+M0	Fill	<Assumed>
+O0	kettle	0
+S0	contains 	{water}
+O0	water	0
+S0	in 	[kettle]
+//
+O0	kettle	0
+S0	contains 	{water}
+O0	water	0
+S0	in 	[kettle]
+M0	Heat	<Assumed>
+O0	kettle	0
+S0	contains 	{water}
+S0	hot
+O0	water	0
+S0	hot
+S0	in 	[kettle]
+//
+O0	coffee grounds	0
+S0	free
+O0	coffee maker	0
+S0	empty
+M0	Place	<Assumed>
+O0	coffee grounds	0
+S0	in 	[coffee maker]
+O0	coffee maker	0
+S0	contains 	{coffee grounds}
+//
+O0	water	0
+S0	hot
+S0	in 	[kettle]
+O0	coffee maker	0
+S0	contains 	{coffee grounds}
+O0	kettle	0
+S0	contains 	{water}
+S0	hot
+M0	Pour	<Assumed>
+O0	water	0
+S0	in 	[coffee maker]
+O0	coffee maker	0
+S0	contains 	{coffee grounds,water}
+O0	kettle	0
+S0	empty
+//
+O0	coffee maker	0
+S0	contains 	{coffee grounds,water}
+M0	Start	<Assumed>
+O0	coffee maker	0
+S0	brewing
+//
+O0	brewed coffee	0
+S0	in 	[coffee maker]
+O0	cup	0
+S0	empty
+O0	coffee maker	0
+S0	brewing
+M0	Pour	<Assumed>
+O0	brewed coffee	0
+S0	in 	[cup]
+O0	cup	0
+S0	contains 	{brewed coffee}
+O0	coffee maker	0
+S0	empty
+//

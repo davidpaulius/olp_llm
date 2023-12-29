@@ -1,5 +1,5 @@
 CompleteObjectSet:{water, cup, pot, stove}
-Step_1: Pour water from a cup into a pot.
+Step 1: Pour water from a cup into a pot.
 Objects: [water, cup, pot]
 Action: Pour
 StateChanges:{
@@ -8,7 +8,7 @@ StateChanges:{
     cup:{Precondition:[contains water], Effect:[empty]}
     }
 
-Step_2: Heat pot of water on the stove.
+Step 2: Heat pot of water on the stove.
 Objects: [water, pot, stove]
 Action: Heat
 StateChanges:{

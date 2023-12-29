@@ -1,0 +1,72 @@
+#	FOON Prototype
+#	Task Prompt: How do I make coffee?
+//
+ONone	coffee filter	None
+SNone	unused
+ONone	coffee maker	None
+SNone	empty
+MNone	Place	<Assumed>
+ONone	coffee filter	None
+SNone	in 	[coffee maker]
+ONone	coffee maker	None
+SNone	contains 	{coffee filter}
+//
+
+ONone	coffee grounds	None
+SNone	unused
+ONone	coffee filter	None
+SNone	in 	[coffee maker]
+MNone	Add	<Assumed>
+ONone	coffee grounds	None
+SNone	in 	[coffee filter]
+ONone	coffee filter	None
+SNone	contains 	{coffee grounds}
+SNone	in 	[coffee maker]
+//
+
+ONone	water	None
+SNone	in container
+ONone	coffee maker	None
+SNone	contains 	{coffee filter,coffee grounds}
+MNone	Pour	<Assumed>
+ONone	water	None
+SNone	in 	[coffee maker]
+ONone	coffee maker	None
+SNone	contains 	{water,coffee filter,coffee grounds}
+//
+
+ONone	coffee maker	None
+SNone	off
+SNone	contains 	{water,coffee filter,coffee grounds}
+MNone	Turn on	<Assumed>
+ONone	coffee maker	None
+SNone	on
+SNone	brewing coffee
+//
+
+ONone	coffee maker	None
+SNone	on
+SNone	brewing coffee
+ONone	brewed coffee	None
+SNone	in 	[coffee maker]
+MNone	Wait	<Assumed>
+ONone	coffee maker	None
+SNone	off
+SNone	contains 	{brewed coffee}
+ONone	brewed coffee	None
+SNone	ready
+SNone	in 	[coffee maker]
+//
+
+ONone	brewed coffee	None
+SNone	ready
+SNone	in 	[coffee maker]
+ONone	coffee cup	None
+SNone	empty
+MNone	Pour	<Assumed>
+ONone	brewed coffee	None
+SNone	in 	[coffee cup]
+ONone	coffee cup	None
+SNone	contains 	{brewed coffee}
+//
+

@@ -4,19 +4,26 @@ import json
 import sys
 import spacy
 import re
-
+import os
 
 # NOTE: we need to import some files from the other FOON directory:
 path_to_FOON_code = './foon_api/'
 if path_to_FOON_code not in sys.path:
     sys.path.append(path_to_FOON_code)
-    try:
-        import FOON_graph_analyser as fga
-    except ImportError:
-        print(" -- ERROR: Missing 'FOON_graph_analyser.py' file! Make sure you have downloaded the FOON API scripts!")
-        sys.exit()
+
+try:
+    import FOON_graph_analyser as fga
+except ImportError:
+    print(" -- ERROR: Missing 'FOON_graph_analyser.py' file! Make sure you have downloaded the FOON API scripts!")
+    sys.exit()
+
+try:
+    import FOON_parser as fpa
+except ImportError:
+    print(" -- ERROR: Missing 'FOON_parser.py' file! Make sure you have downloaded the FOON API scripts!")
+    sys.exit()
+
 ##############################################################################################################
-import FOON_graph_analyser as fga
 
 def create_functionalUnit(object_list, action_verb):
     # -- create a blank functional unit (no object nodes nor motion node):
@@ -47,7 +54,7 @@ def create_functionalUnit(object_list, action_verb):
 
     return functionalUnit
 
-def create_olp_functionalUnit(plan_step,plan_objects):
+def create_olp_functionalUnit(plan_step, plan_objects):
     functionalUnit = fga.FOON.FunctionalUnit()
    
     step_objects = plan_step['Objects']
@@ -56,31 +63,43 @@ def create_olp_functionalUnit(plan_step,plan_objects):
     print("Creating functional unit for:", step_info)
     print("Objects:", step_objects)
 
-    for object in step_objects:
+    for obj in step_objects:
         #create object node 
-        print("Current object is :", object)
+        print("Current object is :", obj)
 
         #check object state changes in step
-        object_state_changes = plan_step['StateChanges'][object]
-        print("\t", object, "state changes:", object_state_changes)
+        object_state_changes = plan_step['StateChanges'][obj]
+        print("\t", obj, "state changes:", object_state_changes)
 
         for state_type in ['Precondition', 'Effect']:
-            current_state_effects = object_state_changes[state_type]
-    
-            new_object = fga.FOON.Object(objectLabel=object)
+            # -- create a FOON object node for which we will then add attributes:    
+            new_object = fga.FOON.Object(objectLabel=obj)
             
-            for state_effect in current_state_effects:
-                related_obj = [obj for obj in plan_objects if obj in state_effect] #check if state effect involves another object in step
-                if related_obj!=[]:
-                    state_effect = state_effect.replace(related_obj[0],"")
-                if "contains" in state_effect:
-                    new_object.addNewState([None, state_effect , None]) #add each state effect to object node
-                    if related_obj!=[]: 
-                        new_object.addIngredient(related_obj[0])  #maybe we should rename to addRelatedObject? instead of addIngredient to be more general outside of cooking domain
+            for state in object_state_changes[state_type]:
+                related_obj = [O for O in plan_objects if O in state] #check if state effect involves another object in step
+
+                parsed_state = state
+
+                if related_obj:
+                    # -- we remove the name of the related object from the state attribute string:
+                    parsed_state = parsed_state.replace(related_obj[0],"")
+
+                if "contains" in state:
+                    # -- this means we have a state expressing some kind of containment: 
+                    try:
+                        new_object.addContainedObject(related_obj[0])
+                    except Exception:
+                        print(state)
+                        print(related_obj)
+                    related_obj = None
+
+                # -- add each state effect to object node:
+                if related_obj:
+                    new_object.addNewState([None, parsed_state, related_obj[0]])
                 else:
-                    if related_obj!=[]: 
-                        new_object.addNewState([None, state_effect, related_obj[0]])
-                print("\t\t", state_type, ":", current_state_effects, "|| related objects:", related_obj)
+                    new_object.addNewState([None, parsed_state, None])
+
+                print("\t\t", state_type, ":", state, "|| related objects:", related_obj)
             # -- add the node to the functional unit:
             functionalUnit.addObjectNode(objectNode=new_object, is_input=(True if state_type == 'Precondition' else False))
 
@@ -132,19 +151,19 @@ def generate_olp(query_task,incontextfile,llm_model="gpt-3.5-turbo", verbose=Tru
     # Stage 1 prompt
     if verbose: print(f"*************************************************************************\nStage1 Prompting\n*************************************************************************")
     system_prompt = "You are an LLM that understands how to generate concise high level plans for arbitrary tasks involving objects. Only focus on what happens to objects.  Stay consistent with object names and use one verb per step. Assume you have all objects necessary for the plan and do not need to obtain anything."
-    user_prompt1 = "After the complete high level plan, list all the unique objects ignoring state changes to those objects. Follow the format unique_objects:object_1, obect_two, ..."
+    user_prompt1 = "After listing the high level plan, list all the unique objects used in the high level plan, including the object created after solving the task, ignoring state changes to those objects. Follow the format 'unique_objects:object_1, object_2, object_3, ...'"
     query1 = query_task+ f"\n{user_prompt1}"
     message.extend([{"role":"system", "content":system_prompt},
                     {"role":"user", "content":query1}])
 
     stage1_response_role,stage1_response_content = generate_response_from_llm(message,llm_model,verbose)
-    if verbose: print(f"Stage1 Response: \n{stage1_response_content}")
+    if verbose: print(f"Stage 1 Response: \n{stage1_response_content}")
     unique_objects = get_objects_frm_llmresponse(stage1_response_content)
     if verbose: print(f"\nExtracted unique_objects:",unique_objects)
     
     # Stage 2 prompt
     if verbose: print(f"*************************************************************************\nStage2 Prompting\n*************************************************************************")
-    user_prompt2 = f"List all states for each object in each step of the generated plan strictly referring to the object names from this set:{unique_objects}. Do not merge states, keep states atomic, mention them separately.\nFollow this example:"
+    user_prompt2 = f"List all states for each object in each step of the generated plan, strictly referring to the object names from this set:{unique_objects}. Do not merge states, keep states atomic, and mention them separately.\nFollow this example:"
     incontext_examples = generate_incontext_examples(incontextfile) #generate incontext examples 
     # print("In context examples:",incontext_examples)
     query2 = f"\n{user_prompt2}\n{incontext_examples}"
@@ -152,7 +171,7 @@ def generate_olp(query_task,incontextfile,llm_model="gpt-3.5-turbo", verbose=Tru
                      {"role":"user", "content":query2}])
     stage2_response_role,stage2_response_content = generate_response_from_llm(message,llm_model,verbose)
 
-    if verbose: print(f"Stage2 Response: \n{stage2_response_content}")
+    if verbose: print(f"Stage 2 Response: \n{stage2_response_content}")
 
     #extract object list and action to create FOON
     object_level_plan = []
@@ -186,7 +205,7 @@ def parse_state_changes(state_changes_str):
 
 def parse_olp_unit(olp_unit):
     # Regular expression patterns
-    step_pattern = r'Step_[0-9]+: (.+)\.'
+    step_pattern = r'Step [0-9]+: (.+)\.'
     objects_pattern = r'Objects: \[(.+)\]'
     action_pattern = r'Action: (.+)'
     state_changes_pattern = r'StateChanges:{(.+?)}\s*}$'

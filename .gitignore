@@ -1,3 +1,9 @@
+# FOON index files
+FOON_index.json
+FOON-motion_index.txt
+FOON-object_index.txt
+FOON-state_index.txt
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

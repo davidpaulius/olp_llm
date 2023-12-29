@@ -1,0 +1,69 @@
+//
+O0	kettle	0
+S0	empty
+O1	water	0
+S1	free
+M0	fill	<Assumed>
+O0	kettle	0
+S2	contains	{water}
+O1	water	0
+S3	in	[kettle]
+//
+O0	kettle	0
+S2	contains	{water}
+O1	water	0
+S3	in	[kettle]
+M1	heat	<Assumed>
+O0	kettle	0
+S2	contains	{water}
+S4	hot
+O1	water	0
+S4	hot
+S3	in	[kettle]
+//
+O2	coffee grounds	0
+S1	free
+O3	coffee maker	0
+S0	empty
+M2	place	<Assumed>
+O2	coffee grounds	0
+S3	in	[coffee maker]
+O3	coffee maker	0
+S2	contains	{coffee grounds}
+//
+O1	water	0
+S4	hot
+S3	in	[kettle]
+O3	coffee maker	0
+S2	contains	{coffee grounds}
+O0	kettle	0
+S2	contains	{water}
+S4	hot
+M3	pour	<Assumed>
+O1	water	0
+S3	in	[coffee maker]
+O3	coffee maker	0
+S2	contains	{coffee grounds,water}
+O0	kettle	0
+S0	empty
+//
+O3	coffee maker	0
+S2	contains	{coffee grounds,water}
+M4	start	<Assumed>
+O3	coffee maker	0
+S5	brewing
+//
+O4	brewed coffee	0
+S3	in	[coffee maker]
+O5	cup	0
+S0	empty
+O3	coffee maker	0
+S5	brewing
+M3	pour	<Assumed>
+O4	brewed coffee	0
+S3	in	[cup]
+O5	cup	0
+S2	contains	{brewed coffee}
+O3	coffee maker	0
+S0	empty
+//
