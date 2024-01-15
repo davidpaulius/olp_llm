@@ -1,71 +1,141 @@
 #	FOON Prototype
-#	-- Task Prompt: How do I make coffee?
+#	-- Task Prompt: How do I make a Greek salad?
 //
-O0	kettle	0
-S0	empty
-O0	water	0
-S0	free
-M0	Fill	<Assumed>
-O0	kettle	0
-S0	contains 	{water}
-O0	water	0
-S0	in 	[kettle]
+O0	lettuce	0
+S0	dirty
+M0	Clean	<Assumed>
+O0	lettuce	0
+S0	clean
 //
-O0	kettle	0
-S0	contains 	{water}
-O0	water	0
-S0	in 	[kettle]
-M0	Heat	<Assumed>
-O0	kettle	0
-S0	contains 	{water}
-S0	hot
-O0	water	0
-S0	hot
-S0	in 	[kettle]
+O0	lettuce	0
+S0	whole
+M0	Chop	<Assumed>
+O0	lettuce	0
+S0	chopped
 //
-O0	coffee grounds	0
-S0	free
-O0	coffee maker	0
+O0	lettuce	0
+S0	not in 	[bowl]
+O0	bowl	0
 S0	empty
 M0	Place	<Assumed>
-O0	coffee grounds	0
-S0	in 	[coffee maker]
-O0	coffee maker	0
-S0	contains 	{coffee grounds}
+O0	lettuce	0
+S0	in 	[bowl]
+O0	bowl	0
+S0	contains 	{lettuce}
 //
-O0	water	0
-S0	hot
-S0	in 	[kettle]
-O0	coffee maker	0
-S0	contains 	{coffee grounds}
-O0	kettle	0
-S0	contains 	{water}
-S0	hot
-M0	Pour	<Assumed>
-O0	water	0
-S0	in 	[coffee maker]
-O0	coffee maker	0
-S0	contains 	{coffee grounds,water}
-O0	kettle	0
-S0	empty
+O0	tomatoes	0
+S0	whole
+M0	Slice	<Assumed>
+O0	tomatoes	0
+S0	sliced
 //
-O0	coffee maker	0
-S0	contains 	{coffee grounds,water}
-M0	Start	<Assumed>
-O0	coffee maker	0
-S0	brewing
+O0	tomatoes	0
+S0	not in 	[bowl]
+O0	bowl	0
+S0	contains 	{lettuce}
+M0	Add	<Assumed>
+O0	tomatoes	0
+S0	in 	[bowl]
+O0	bowl	0
+S0	contains 	{lettuce,tomatoes}
 //
-O0	brewed coffee	0
-S0	in 	[coffee maker]
-O0	cup	0
-S0	empty
-O0	coffee maker	0
-S0	brewing
-M0	Pour	<Assumed>
-O0	brewed coffee	0
-S0	in 	[cup]
-O0	cup	0
-S0	contains 	{brewed coffee}
-O0	coffee maker	0
-S0	empty
+O0	cucumbers	0
+S0	whole
+M0	Slice	<Assumed>
+O0	cucumbers	0
+S0	sliced
+//
+O0	cucumbers	0
+S0	not in 	[bowl]
+O0	bowl	0
+S0	contains 	{lettuce,tomatoes}
+M0	Add	<Assumed>
+O0	cucumbers	0
+S0	in 	[bowl]
+O0	bowl	0
+S0	contains 	{lettuce,tomatoes,cucumbers}
+//
+O0	onions	0
+S0	whole
+M0	Slice	<Assumed>
+O0	onions	0
+S0	sliced
+//
+O0	onions	0
+S0	not in 	[bowl]
+O0	bowl	0
+S0	contains 	{lettuce,tomatoes,cucumbers}
+M0	Add	<Assumed>
+O0	onions	0
+S0	in 	[bowl]
+O0	bowl	0
+S0	contains 	{lettuce,tomatoes,cucumbers,onions}
+//
+O0	olives	0
+S0	whole
+M0	Slice	<Assumed>
+O0	olives	0
+S0	sliced
+//
+O0	olives	0
+S0	not in 	[bowl]
+O0	bowl	0
+S0	contains 	{lettuce,tomatoes,cucumbers,onions}
+M0	Add	<Assumed>
+O0	olives	0
+S0	in 	[bowl]
+O0	bowl	0
+S0	contains 	{lettuce,tomatoes,cucumbers,onions,olives}
+//
+O0	feta cheese	0
+S0	whole
+M0	Crumble	<Assumed>
+O0	feta cheese	0
+S0	crumbled
+//
+O0	feta cheese	0
+S0	not in 	[bowl]
+O0	bowl	0
+S0	contains 	{lettuce,tomatoes,cucumbers,onions,olives}
+M0	Add	<Assumed>
+O0	feta cheese	0
+S0	in 	[bowl]
+O0	bowl	0
+S0	contains 	{lettuce,tomatoes,cucumbers,onions,olives,feta cheese}
+//
+O0	olive oil	0
+S0	not in 	[bowl]
+O0	bowl	0
+S0	contains 	{lettuce,tomatoes,cucumbers,onions,olives,feta cheese}
+M0	Drizzle	<Assumed>
+O0	olive oil	0
+S0	in 	[bowl]
+O0	bowl	0
+S0	contains 	{lettuce,tomatoes,cucumbers,onions,olives,feta cheese,olive oil}
+//
+O0	oregano	0
+S0	not in 	[bowl]
+O0	bowl	0
+S0	contains 	{lettuce,tomatoes,cucumbers,onions,olives,feta cheese,olive oil}
+M0	Sprinkle	<Assumed>
+O0	oregano	0
+S0	in 	[bowl]
+O0	bowl	0
+S0	contains 	{lettuce,tomatoes,cucumbers,onions,olives,feta cheese,olive oil,oregano}
+//
+O0	bowl	0
+S0	contains 	{lettuce,tomatoes,cucumbers,onions,olives,feta cheese,olive oil,oregano}
+O0	salad	0
+S0	not mixed
+M0	Toss	<Assumed>
+O0	bowl	0
+S0	contains 	{salad}
+O0	salad	0
+S0	mixed
+//
+O0	salad	0
+S0	in 	[bowl]
+M0	Serve	<Assumed>
+O0	salad	0
+S0	served
 //

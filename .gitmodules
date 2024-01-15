@@ -1,3 +1,3 @@
-[submodule "foon_api"]
-	path = foon_api
-	url = https://github.com/davidpaulius/foon_api
+[submodule "foon_to_pddl"]
+	path = foon_to_pddl
+	url = https://github.com/davidpaulius/foon_to_pddl

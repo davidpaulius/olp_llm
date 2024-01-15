@@ -163,7 +163,7 @@ def generate_olp(query_task,incontextfile,llm_model="gpt-3.5-turbo", verbose=Tru
     
     # Stage 2 prompt
     if verbose: print(f"*************************************************************************\nStage2 Prompting\n*************************************************************************")
-    user_prompt2 = f"List all states for each object in each step of the generated plan, strictly referring to the object names from this set:{unique_objects}. Do not merge states, keep states atomic, and mention them separately.\nFollow this example:"
+    user_prompt2 = f"List all states for each object in each step of the generated plan, strictly referring to the object names from this set:{unique_objects}. Do not merge states, keep states atomic, and mention them separately. If an object has ingredients in it, use the word \"contains X\", where \"X\" refers to an ingredient.\nFollow this example:"
     incontext_examples = generate_incontext_examples(incontextfile) #generate incontext examples 
     # print("In context examples:",incontext_examples)
     query2 = f"\n{user_prompt2}\n{incontext_examples}"

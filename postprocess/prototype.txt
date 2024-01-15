@@ -1,69 +1,139 @@
 //
-O0	kettle	0
-S0	empty
-O1	water	0
-S1	free
-M0	fill	<Assumed>
-O0	kettle	0
-S2	contains	{water}
-O1	water	0
-S3	in	[kettle]
+O0	lettuce	0
+S0	dirty
+M0	clean	<Assumed>
+O0	lettuce	0
+S1	clean
 //
-O0	kettle	0
-S2	contains	{water}
-O1	water	0
-S3	in	[kettle]
-M1	heat	<Assumed>
-O0	kettle	0
-S2	contains	{water}
-S4	hot
-O1	water	0
-S4	hot
-S3	in	[kettle]
+O0	lettuce	0
+S2	whole
+M1	chop	<Assumed>
+O0	lettuce	0
+S3	chopped
 //
-O2	coffee grounds	0
-S1	free
-O3	coffee maker	0
-S0	empty
+O0	lettuce	0
+S4	not in	[bowl]
+O1	bowl	0
+S5	empty
 M2	place	<Assumed>
-O2	coffee grounds	0
-S3	in	[coffee maker]
-O3	coffee maker	0
-S2	contains	{coffee grounds}
+O0	lettuce	0
+S6	in	[bowl]
+O1	bowl	0
+S7	contains	{lettuce}
 //
-O1	water	0
-S4	hot
-S3	in	[kettle]
-O3	coffee maker	0
-S2	contains	{coffee grounds}
-O0	kettle	0
-S2	contains	{water}
-S4	hot
-M3	pour	<Assumed>
-O1	water	0
-S3	in	[coffee maker]
-O3	coffee maker	0
-S2	contains	{coffee grounds,water}
-O0	kettle	0
-S0	empty
+O2	tomato	0
+S2	whole
+M3	slice	<Assumed>
+O2	tomato	0
+S8	sliced
 //
-O3	coffee maker	0
-S2	contains	{coffee grounds,water}
-M4	start	<Assumed>
-O3	coffee maker	0
-S5	brewing
+O2	tomato	0
+S4	not in	[bowl]
+O1	bowl	0
+S7	contains	{lettuce}
+M4	add	<Assumed>
+O2	tomato	0
+S6	in	[bowl]
+O1	bowl	0
+S7	contains	{lettuce,tomato}
 //
-O4	brewed coffee	0
-S3	in	[coffee maker]
-O5	cup	0
-S0	empty
-O3	coffee maker	0
-S5	brewing
-M3	pour	<Assumed>
-O4	brewed coffee	0
-S3	in	[cup]
-O5	cup	0
-S2	contains	{brewed coffee}
-O3	coffee maker	0
-S0	empty
+O3	cucumber	0
+S2	whole
+M3	slice	<Assumed>
+O3	cucumber	0
+S8	sliced
+//
+O3	cucumber	0
+S4	not in	[bowl]
+O1	bowl	0
+S7	contains	{lettuce,tomato}
+M4	add	<Assumed>
+O3	cucumber	0
+S6	in	[bowl]
+O1	bowl	0
+S7	contains	{lettuce,tomato,cucumber}
+//
+O4	onion	0
+S2	whole
+M3	slice	<Assumed>
+O4	onion	0
+S8	sliced
+//
+O4	onion	0
+S4	not in	[bowl]
+O1	bowl	0
+S7	contains	{lettuce,tomato,cucumber}
+M4	add	<Assumed>
+O4	onion	0
+S6	in	[bowl]
+O1	bowl	0
+S7	contains	{lettuce,tomato,cucumber,onion}
+//
+O5	olive	0
+S2	whole
+M3	slice	<Assumed>
+O5	olive	0
+S8	sliced
+//
+O5	olive	0
+S4	not in	[bowl]
+O1	bowl	0
+S7	contains	{lettuce,tomato,cucumber,onion}
+M4	add	<Assumed>
+O5	olive	0
+S6	in	[bowl]
+O1	bowl	0
+S7	contains	{lettuce,tomato,cucumber,onion,olive}
+//
+O6	feta cheese	0
+S2	whole
+M5	crumble	<Assumed>
+O6	feta cheese	0
+S9	crumbled
+//
+O6	feta cheese	0
+S4	not in	[bowl]
+O1	bowl	0
+S7	contains	{lettuce,tomato,cucumber,onion,olive}
+M4	add	<Assumed>
+O6	feta cheese	0
+S6	in	[bowl]
+O1	bowl	0
+S7	contains	{lettuce,tomato,cucumber,onion,olive,feta cheese}
+//
+O7	olive oil	0
+S4	not in	[bowl]
+O1	bowl	0
+S7	contains	{lettuce,tomato,cucumber,onion,olive,feta cheese}
+M6	drizzle	<Assumed>
+O7	olive oil	0
+S6	in	[bowl]
+O1	bowl	0
+S7	contains	{lettuce,tomato,cucumber,onion,olive,feta cheese,olive oil}
+//
+O8	oregano	0
+S4	not in	[bowl]
+O1	bowl	0
+S7	contains	{lettuce,tomato,cucumber,onion,olive,feta cheese,olive oil}
+M7	sprinkle	<Assumed>
+O8	oregano	0
+S6	in	[bowl]
+O1	bowl	0
+S7	contains	{lettuce,tomato,cucumber,onion,olive,feta cheese,olive oil,oregano}
+//
+O1	bowl	0
+S7	contains	{lettuce,tomato,cucumber,onion,olive,feta cheese,olive oil,oregano}
+O9	salad	0
+S10	not mixed
+M8	toss	<Assumed>
+O1	bowl	0
+S7	contains	{salad}
+O9	salad	0
+S11	mixed
+//
+O9	salad	0
+S6	in	[bowl]
+M9	serve	<Assumed>
+O9	salad	0
+S12	served
 //
