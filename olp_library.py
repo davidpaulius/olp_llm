@@ -6,22 +6,29 @@ import spacy
 import re
 import os
 
+from pathlib import Path
+
 # NOTE: we need to import some files from the other FOON directory:
-path_to_FOON_code = './foon_api/'
-if path_to_FOON_code not in sys.path:
-    sys.path.append(path_to_FOON_code)
+FOON_to_PDDL_path = './foon_to_pddl/'
+if FOON_to_PDDL_path not in sys.path:
+    sys.path.append(FOON_to_PDDL_path)
+
+try:
+    import FOON_to_PDDL as ftp
+except ImportError:
+    print(" -- ERROR: Missing 'FOON_to_PDDL.py' file!")
+    sys.exit()
+
+FOON_API_path = './foon_to_pddl/foon_api'
+if FOON_to_PDDL_path not in sys.path:
+    sys.path.append(FOON_API_path)
 
 try:
     import FOON_graph_analyser as fga
-except ImportError:
-    print(" -- ERROR: Missing 'FOON_graph_analyser.py' file! Make sure you have downloaded the FOON API scripts!")
-    sys.exit()
-
-try:
     import FOON_parser as fpa
 except ImportError:
-    print(" -- ERROR: Missing 'FOON_parser.py' file! Make sure you have downloaded the FOON API scripts!")
     sys.exit()
+
 
 ##############################################################################################################
 
@@ -82,7 +89,15 @@ def create_olp_functionalUnit(plan_step, plan_objects):
 
                 if related_obj:
                     # -- we remove the name of the related object from the state attribute string:
-                    parsed_state = parsed_state.replace(related_obj[0],"")
+                    parsed_state = parsed_state.replace(related_obj[0],"").strip()
+                else:
+                    # NOTE: sometimes there will be extra objects not mentioned by GPT that are needed or referenced:
+                    # -- these would be described by geometric states:
+                    geometric_states = ['in', 'on', 'under']
+                    for G in geometric_states:
+                        if f'{G} ' in parsed_state:
+                            related_obj = [parsed_state.split(f'{G} ')[1]]
+                            parsed_state = parsed_state.replace(related_obj[0],"").strip()
 
                 if "contains" in state:
                     # -- this means we have a state expressing some kind of containment: 
@@ -109,15 +124,15 @@ def create_olp_functionalUnit(plan_step, plan_objects):
 
     return functionalUnit
 
-def generate_response_from_llm(given_prompt, model_name, verbose):
+def prompt_LLM(given_prompt, model_name, verbose):
     if verbose: print(f"Model: {model_name}\nComplete prompt:")
     if verbose: print(json.dumps(given_prompt,indent=4))
     # create a completion
     completion = openai.ChatCompletion.create(
         model=model_name,
         messages=given_prompt,
-        temperature=0.3,
-        max_tokens = 2000,
+        temperature=0.1,
+        max_tokens=2000,
         top_p=1,
         frequency_penalty=0,
         presence_penalty=0
@@ -127,7 +142,7 @@ def generate_response_from_llm(given_prompt, model_name, verbose):
     return(response.role,response.content)
 
 
-def get_objects_frm_llmresponse(response):
+def parse_objects(response):
     unique_objects = []
     for line in response.lower().split("\n"):
         if "unique_objects" in line or "unique objects" in line:
@@ -149,27 +164,37 @@ def generate_incontext_examples(incontextfile):
 def generate_olp(query_task,incontextfile,llm_model="gpt-3.5-turbo", verbose=True):
     message = []
     # Stage 1 prompt
-    if verbose: print(f"*************************************************************************\nStage1 Prompting\n*************************************************************************")
-    system_prompt = "You are an LLM that understands how to generate concise high level plans for arbitrary tasks involving objects. Only focus on what happens to objects.  Stay consistent with object names and use one verb per step. Assume you have all objects necessary for the plan and do not need to obtain anything."
-    user_prompt1 = "After listing the high level plan, list all the unique objects used in the high level plan, including the object created after solving the task, ignoring state changes to those objects. Follow the format 'unique_objects:object_1, object_2, object_3, ...'"
+    if verbose: print(f"*************************************************************************\nStage 1 Prompting\n*************************************************************************")
+    system_prompt = "You are an LLM that understands how to generate concise high level plans for arbitrary tasks involving objects and manipulation." \
+        " Only focus on what happens to objects." \
+        " Stay consistent with object names and use one verb per step." \
+        " Assume all objects needed to complete the plan are available: you do not need to retrieve or clean objects."
+    user_prompt1 = "After listing the high level plan, list all the unique objects used in the high level plan, including the object created after solving the task, ignoring state changes to those objects." \
+        " Follow the format 'unique_objects:object_1, object_2, object_3, ...'"
     query1 = query_task+ f"\n{user_prompt1}"
     message.extend([{"role":"system", "content":system_prompt},
                     {"role":"user", "content":query1}])
 
-    stage1_response_role,stage1_response_content = generate_response_from_llm(message,llm_model,verbose)
+    stage1_response_role,stage1_response_content = prompt_LLM(message,llm_model,verbose)
     if verbose: print(f"Stage 1 Response: \n{stage1_response_content}")
-    unique_objects = get_objects_frm_llmresponse(stage1_response_content)
+    unique_objects = parse_objects(stage1_response_content)
     if verbose: print(f"\nExtracted unique_objects:",unique_objects)
     
     # Stage 2 prompt
-    if verbose: print(f"*************************************************************************\nStage2 Prompting\n*************************************************************************")
-    user_prompt2 = f"List all states for each object in each step of the generated plan, strictly referring to the object names from this set:{unique_objects}. Do not merge states, keep states atomic, and mention them separately. If an object has ingredients in it, use the word \"contains X\", where \"X\" refers to an ingredient.\nFollow this example:"
+    if verbose: print(f"*************************************************************************\nStage 2 Prompting\n*************************************************************************")
+    user_prompt2 = f"List all states for each object needed for each step of the generated plan: you must strictly refer to the object names from this set:{unique_objects}."\
+        " Do not skip any steps." \
+        " Do not merge states, keep states atomic, and mention them separately." \
+        " You can infer the type of container that ingredients can be found in (e.g., salt may be found in a shaker)." \
+        " You can also infer tools or utensils needed to perform a given action." \
+        " If an object has ingredients in it, use the word \"contains X\", where \"X\" refers to an ingredient." \
+        "\nFollow this example:"
     incontext_examples = generate_incontext_examples(incontextfile) #generate incontext examples 
     # print("In context examples:",incontext_examples)
     query2 = f"\n{user_prompt2}\n{incontext_examples}"
     message.extend([{"role":stage1_response_role,"content":stage1_response_content},
                      {"role":"user", "content":query2}])
-    stage2_response_role,stage2_response_content = generate_response_from_llm(message,llm_model,verbose)
+    stage2_response_role,stage2_response_content = prompt_LLM(message,llm_model,verbose)
 
     if verbose: print(f"Stage 2 Response: \n{stage2_response_content}")
 

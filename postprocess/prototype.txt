@@ -1,139 +1,103 @@
 //
-O0	lettuce	0
-S0	dirty
-M0	clean	<Assumed>
-O0	lettuce	0
+O0	tomato	0
+S0	whole
+O1	knife	0
 S1	clean
+M0	slice	<Assumed>
+O0	tomato	0
+S2	sliced
+O1	knife	0
+S3	dirty
 //
-O0	lettuce	0
-S2	whole
-M1	chop	<Assumed>
-O0	lettuce	0
-S3	chopped
+O2	cucumber	0
+S0	whole
+O1	knife	0
+S3	dirty
+M0	slice	<Assumed>
+O2	cucumber	0
+S2	sliced
+O1	knife	0
+S3	dirty
 //
-O0	lettuce	0
-S4	not in	[bowl]
-O1	bowl	0
+O3	onion	0
+S0	whole
+O1	knife	0
+S3	dirty
+M0	slice	<Assumed>
+O3	onion	0
+S2	sliced
+O1	knife	0
+S3	dirty
+//
+O4	olive	0
+S0	whole
+O1	knife	0
+S3	dirty
+M0	slice	<Assumed>
+O4	olive	0
+S2	sliced
+O1	knife	0
+S3	dirty
+//
+O5	feta cheese	0
+S0	whole
+M1	crumble	<Assumed>
+O5	feta cheese	0
+S4	crumbled
+//
+O0	tomato	0
+S2	sliced
+O2	cucumber	0
+S2	sliced
+O3	onion	0
+S2	sliced
+O4	olive	0
+S2	sliced
+O5	feta cheese	0
+S4	crumbled
+O6	bowl	0
 S5	empty
-M2	place	<Assumed>
-O0	lettuce	0
+M2	combine	<Assumed>
+O0	tomato	0
 S6	in	[bowl]
-O1	bowl	0
-S7	contains	{lettuce}
-//
-O2	tomato	0
-S2	whole
-M3	slice	<Assumed>
-O2	tomato	0
-S8	sliced
-//
-O2	tomato	0
-S4	not in	[bowl]
-O1	bowl	0
-S7	contains	{lettuce}
-M4	add	<Assumed>
-O2	tomato	0
+O2	cucumber	0
 S6	in	[bowl]
-O1	bowl	0
-S7	contains	{lettuce,tomato}
-//
-O3	cucumber	0
-S2	whole
-M3	slice	<Assumed>
-O3	cucumber	0
-S8	sliced
-//
-O3	cucumber	0
-S4	not in	[bowl]
-O1	bowl	0
-S7	contains	{lettuce,tomato}
-M4	add	<Assumed>
-O3	cucumber	0
+O3	onion	0
 S6	in	[bowl]
-O1	bowl	0
-S7	contains	{lettuce,tomato,cucumber}
-//
-O4	onion	0
-S2	whole
-M3	slice	<Assumed>
-O4	onion	0
-S8	sliced
-//
-O4	onion	0
-S4	not in	[bowl]
-O1	bowl	0
-S7	contains	{lettuce,tomato,cucumber}
-M4	add	<Assumed>
-O4	onion	0
+O4	olive	0
 S6	in	[bowl]
-O1	bowl	0
-S7	contains	{lettuce,tomato,cucumber,onion}
-//
-O5	olive	0
-S2	whole
-M3	slice	<Assumed>
-O5	olive	0
-S8	sliced
-//
-O5	olive	0
-S4	not in	[bowl]
-O1	bowl	0
-S7	contains	{lettuce,tomato,cucumber,onion}
-M4	add	<Assumed>
-O5	olive	0
+O5	feta cheese	0
 S6	in	[bowl]
-O1	bowl	0
-S7	contains	{lettuce,tomato,cucumber,onion,olive}
-//
-O6	feta cheese	0
-S2	whole
-M5	crumble	<Assumed>
-O6	feta cheese	0
-S9	crumbled
-//
-O6	feta cheese	0
-S4	not in	[bowl]
-O1	bowl	0
-S7	contains	{lettuce,tomato,cucumber,onion,olive}
-M4	add	<Assumed>
-O6	feta cheese	0
-S6	in	[bowl]
-O1	bowl	0
-S7	contains	{lettuce,tomato,cucumber,onion,olive,feta cheese}
+O6	bowl	0
+S7	contains	{tomato,cucumber,onion,olive,feta cheese}
 //
 O7	olive oil	0
-S4	not in	[bowl]
-O1	bowl	0
-S7	contains	{lettuce,tomato,cucumber,onion,olive,feta cheese}
-M6	drizzle	<Assumed>
+S6	in	[bottle]
+O9	salad	0
+S6	in	[bowl]
+M3	drizzle	<Assumed>
 O7	olive oil	0
-S6	in	[bowl]
-O1	bowl	0
-S7	contains	{lettuce,tomato,cucumber,onion,olive,feta cheese,olive oil}
-//
-O8	oregano	0
-S4	not in	[bowl]
-O1	bowl	0
-S7	contains	{lettuce,tomato,cucumber,onion,olive,feta cheese,olive oil}
-M7	sprinkle	<Assumed>
-O8	oregano	0
-S6	in	[bowl]
-O1	bowl	0
-S7	contains	{lettuce,tomato,cucumber,onion,olive,feta cheese,olive oil,oregano}
-//
-O1	bowl	0
-S7	contains	{lettuce,tomato,cucumber,onion,olive,feta cheese,olive oil,oregano}
+S8	on	[salad]
 O9	salad	0
-S10	not mixed
-M8	toss	<Assumed>
-O1	bowl	0
-S7	contains	{salad}
+S7	contains	{olive oil}
+//
+O10	oregano	0
+S6	in	[container]
 O9	salad	0
-S11	mixed
+S7	contains	{olive oil}
+M4	sprinkle	<Assumed>
+O10	oregano	0
+S8	on	[salad]
+O9	salad	0
+S7	contains	{oregano}
 //
 O9	salad	0
-S6	in	[bowl]
-M9	serve	<Assumed>
+S7	contains	{tomato,cucumber,onion,olive,feta cheese,olive oil,oregano}
+O12	salad tongs	0
+S1	clean
+M5	toss	<Assumed>
 O9	salad	0
-S12	served
+S9	mixed
+O12	salad tongs	0
+S3	dirty
 //

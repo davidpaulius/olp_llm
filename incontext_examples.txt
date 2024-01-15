@@ -6,13 +6,22 @@ StateChanges:{
     water:{Precondition:[in cup], Effect:[in pot]},
     pot:{Precondition:[empty], Effect:[contains water]},
     cup:{Precondition:[contains water], Effect:[empty]}
-    }
+}
 
 Step 2: Heat pot of water on the stove.
 Objects: [water, pot, stove]
 Action: Heat
 StateChanges:{
     water:{Precondition:[in pot], Effect:[in pot, boiling]},
-    pot:{Precondition:[contains water, on stove], Effect:[contains water, hot]},
+    pot:{Precondition:[contains water, on stove], Effect:[contains water, on stove, hot]},
     stove:{Precondition:[on], Effect:[off]}
-    }
+}
+
+Step 3: Add salt from shaker to the pot.
+Objects: [salt, shaker, pot]
+Action: Heat
+StateChanges:{
+    salt:{Precondition:[in shaker], Effect:[in pot]},
+    shaker:{Precondition:[contains salt], Effect:[]},
+    pot:{Precondition:[contains water, on stove, hot], Effect:[contains water, contains salt, on stove, hot]},
+}
