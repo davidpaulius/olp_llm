@@ -70,6 +70,8 @@ def create_olp_functionalUnit(plan_step, plan_objects):
     print("Creating functional unit for:", step_info)
     print("Objects:", step_objects)
 
+    geometric_states = ['in', 'on', 'under', 'contains']
+
     for obj in step_objects:
         #create object node 
         print("Current object is :", obj)
@@ -83,26 +85,32 @@ def create_olp_functionalUnit(plan_step, plan_objects):
             new_object = fga.FOON.Object(objectLabel=obj)
             
             for state in object_state_changes[state_type]:
-                related_obj = [O for O in plan_objects if O in state] #check if state effect involves another object in step
+                # -- check if state effect involves another object in step
+                related_obj = None
 
                 parsed_state = state
 
-                if related_obj:
-                    # -- we remove the name of the related object from the state attribute string:
-                    parsed_state = parsed_state.replace(related_obj[0],"").strip()
-                else:
-                    # NOTE: sometimes there will be extra objects not mentioned by GPT that are needed or referenced:
-                    # -- these would be described by geometric states:
-                    geometric_states = ['in', 'on', 'under']
+                for O in plan_objects:
+                    if O in state:
+                        # -- check if there is no object left after removing the related object given by the LLM:
+                        state_sans_obj = parsed_state.replace(O,"").strip()
+                        # -- we remove the name of the related object from the state attribute string:
+                        if state_sans_obj in geometric_states:
+                            related_obj = O
+                            parsed_state = parsed_state.replace(related_obj,"").strip()
+
+                if not related_obj:
+                    # -- this means we have an object not listed initially by the LLM:
+                    #       (usually references to containers or states not foreseen at the time of recipe generation)
                     for G in geometric_states:
                         if f'{G} ' in parsed_state:
-                            related_obj = [parsed_state.split(f'{G} ')[1]]
-                            parsed_state = parsed_state.replace(related_obj[0],"").strip()
+                            related_obj = parsed_state.split(f'{G} ')[1]
+                            parsed_state = parsed_state.replace(related_obj,"").strip()
 
                 if "contains" in state:
                     # -- this means we have a state expressing some kind of containment: 
                     try:
-                        new_object.addContainedObject(related_obj[0])
+                        new_object.addContainedObject(related_obj)
                     except Exception:
                         print(state)
                         print(related_obj)
@@ -110,7 +118,7 @@ def create_olp_functionalUnit(plan_step, plan_objects):
 
                 # -- add each state effect to object node:
                 if related_obj:
-                    new_object.addNewState([None, parsed_state, related_obj[0]])
+                    new_object.addNewState([None, parsed_state, related_obj])
                 else:
                     new_object.addNewState([None, parsed_state, None])
 

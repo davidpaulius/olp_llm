@@ -1,105 +1,98 @@
 #	FOON Prototype
-#	-- Task Prompt: How do I make a Greek salad?
+#	-- Task Prompt: How do I make a Bloody Mary cocktail?
 //
-O0	tomatoes	0
-S0	whole
-O0	knife	0
-S0	clean
-M0	Slice	<Assumed>
-O0	tomatoes	0
-S0	sliced
-O0	knife	0
-S0	dirty
-//
-O0	cucumbers	0
-S0	whole
-O0	knife	0
-S0	dirty
-M0	Slice	<Assumed>
-O0	cucumbers	0
-S0	sliced
-O0	knife	0
-S0	dirty
-//
-O0	onions	0
-S0	whole
-O0	knife	0
-S0	dirty
-M0	Slice	<Assumed>
-O0	onions	0
-S0	sliced
-O0	knife	0
-S0	dirty
-//
-O0	olives	0
-S0	whole
-O0	knife	0
-S0	dirty
-M0	Slice	<Assumed>
-O0	olives	0
-S0	sliced
-O0	knife	0
-S0	dirty
-//
-O0	feta cheese	0
-S0	whole
-M0	Crumble	<Assumed>
-O0	feta cheese	0
-S0	crumbled
-//
-O0	tomatoes	0
-S0	sliced
-O0	cucumbers	0
-S0	sliced
-O0	onions	0
-S0	sliced
-O0	olives	0
-S0	sliced
-O0	feta cheese	0
-S0	crumbled
-O0	bowl	0
+O0	ice cubes	0
+S0	separate
+O0	glass	0
 S0	empty
-M0	Combine	<Assumed>
-O0	tomatoes	0
-S0	in	[bowl]
-O0	cucumbers	0
-S0	in	[bowl]
-O0	onions	0
-S0	in	[bowl]
-O0	olives	0
-S0	in	[bowl]
-O0	feta cheese	0
-S0	in	[bowl]
-O0	bowl	0
-S0	contains	{tomatoes,cucumbers,onions,olives,feta cheese}
+M0	Place	<Assumed>
+O0	ice cubes	0
+S0	in	[glass]
+O0	glass	0
+S0	contains	{ice cubes}
 //
-O0	olive oil	0
+O0	vodka	0
 S0	in	[bottle]
-O0	salad	0
-S0	in	[bowl]
-M0	Drizzle	<Assumed>
-O0	olive oil	0
-S0	on	[salad]
-O0	salad	0
-S0	contains	{olive oil}
+O0	glass	0
+S0	contains	{ice cubes}
+M0	Pour	<Assumed>
+O0	vodka	0
+S0	in	[glass]
+O0	glass	0
+S0	contains	{ice cubes,vodka}
 //
-O0	oregano	0
-S0	in	[container]
-O0	salad	0
-S0	contains	{olive oil}
+O0	tomato juice	0
+S0	in	[bottle]
+O0	glass	0
+S0	contains	{ice cubes,vodka}
+M0	Add	<Assumed>
+O0	tomato juice	0
+S0	in	[glass]
+O0	glass	0
+S0	contains	{ice cubes,vodka,tomato juice}
+//
+O0	lemon	0
+S0	whole
+O0	glass	0
+S0	contains	{ice cubes,vodka,tomato juice}
+M0	Squeeze	<Assumed>
+O0	lemon	0
+S0	squeezed
+O0	glass	0
+S0	contains	{ice cubes,vodka,tomato juice,lemon}
+//
+O0	Worcestershire sauce	0
+S0	in	[bottle]
+O0	glass	0
+S0	contains	{ice cubes,vodka,tomato juice,lemon}
+M0	Add	<Assumed>
+O0	Worcestershire sauce	0
+S0	in	[glass]
+O0	glass	0
+S0	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce}
+//
+O0	Tabasco sauce	0
+S0	in	[bottle]
+O0	glass	0
+S0	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce}
+M0	Add	<Assumed>
+O0	Tabasco sauce	0
+S0	in	[glass]
+O0	glass	0
+S0	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce,Tabasco sauce}
+//
+O0	salt	0
+S0	in	[shaker]
+O0	pepper	0
+S0	in	[shaker]
+O0	glass	0
+S0	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce,Tabasco sauce}
 M0	Sprinkle	<Assumed>
-O0	oregano	0
-S0	on	[salad]
-O0	salad	0
-S0	contains	{oregano}
+O0	salt	0
+S0	in	[glass]
+O0	pepper	0
+S0	in	[glass]
+O0	glass	0
+S0	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce,Tabasco sauce,salt,pepper}
 //
-O0	salad	0
-S0	contains	{tomatoes,cucumbers,onions,olives,feta cheese,olive oil,oregano}
-O0	salad tongs	0
+O0	stirrer	0
 S0	clean
-M0	Toss	<Assumed>
-O0	salad	0
-S0	mixed
-O0	salad tongs	0
-S0	dirty
+O0	glass	0
+S0	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce,Tabasco sauce,salt,pepper}
+M0	Stir	<Assumed>
+O0	stirrer	0
+S0	used
+O0	glass	0
+S0	contains	{mixed cocktail}
+//
+O0	celery stalk	0
+S0	whole
+O0	glass	0
+S0	contains	{mixed cocktail}
+M0	Garnish	<Assumed>
+O0	celery stalk	0	!
+S0	in	[glass]
+O0	glass	0	!
+S0	contains	{mixed cocktail}
+S0	garnished with celery stalk
 //

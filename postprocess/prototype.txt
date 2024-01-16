@@ -1,103 +1,96 @@
 //
-O0	tomato	0
-S0	whole
-O1	knife	0
-S1	clean
-M0	slice	<Assumed>
-O0	tomato	0
-S2	sliced
-O1	knife	0
-S3	dirty
+O0	ice cubes	0
+S0	separate
+O1	glass	0
+S1	empty
+M0	place	<Assumed>
+O0	ice cubes	0
+S2	in	[glass]
+O1	glass	0
+S3	contains	{ice cubes}
 //
-O2	cucumber	0
-S0	whole
-O1	knife	0
-S3	dirty
-M0	slice	<Assumed>
-O2	cucumber	0
-S2	sliced
-O1	knife	0
-S3	dirty
+O2	vodka	0
+S2	in	[bottle]
+O1	glass	0
+S3	contains	{ice cubes}
+M1	pour	<Assumed>
+O2	vodka	0
+S2	in	[glass]
+O1	glass	0
+S3	contains	{ice cubes,vodka}
 //
-O3	onion	0
-S0	whole
-O1	knife	0
-S3	dirty
-M0	slice	<Assumed>
-O3	onion	0
-S2	sliced
-O1	knife	0
-S3	dirty
+O4	tomato juice	0
+S2	in	[bottle]
+O1	glass	0
+S3	contains	{ice cubes,vodka}
+M2	add	<Assumed>
+O4	tomato juice	0
+S2	in	[glass]
+O1	glass	0
+S3	contains	{ice cubes,vodka,tomato juice}
 //
-O4	olive	0
-S0	whole
-O1	knife	0
-S3	dirty
-M0	slice	<Assumed>
-O4	olive	0
-S2	sliced
-O1	knife	0
-S3	dirty
+O5	lemon	0
+S4	whole
+O1	glass	0
+S3	contains	{ice cubes,vodka,tomato juice}
+M3	squeeze	<Assumed>
+O5	lemon	0
+S5	squeezed
+O1	glass	0
+S3	contains	{ice cubes,vodka,tomato juice,lemon}
 //
-O5	feta cheese	0
-S0	whole
-M1	crumble	<Assumed>
-O5	feta cheese	0
-S4	crumbled
+O6	worcestershire sauce	0
+S2	in	[bottle]
+O1	glass	0
+S3	contains	{ice cubes,vodka,tomato juice,lemon}
+M2	add	<Assumed>
+O6	worcestershire sauce	0
+S2	in	[glass]
+O1	glass	0
+S3	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce}
 //
-O0	tomato	0
-S2	sliced
-O2	cucumber	0
-S2	sliced
-O3	onion	0
-S2	sliced
-O4	olive	0
-S2	sliced
-O5	feta cheese	0
-S4	crumbled
-O6	bowl	0
-S5	empty
-M2	combine	<Assumed>
-O0	tomato	0
-S6	in	[bowl]
-O2	cucumber	0
-S6	in	[bowl]
-O3	onion	0
-S6	in	[bowl]
-O4	olive	0
-S6	in	[bowl]
-O5	feta cheese	0
-S6	in	[bowl]
-O6	bowl	0
-S7	contains	{tomato,cucumber,onion,olive,feta cheese}
+O8	tabasco sauce	0
+S2	in	[bottle]
+O1	glass	0
+S3	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce}
+M2	add	<Assumed>
+O8	tabasco sauce	0
+S2	in	[glass]
+O1	glass	0
+S3	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce,Tabasco sauce}
 //
-O7	olive oil	0
-S6	in	[bottle]
-O9	salad	0
-S6	in	[bowl]
-M3	drizzle	<Assumed>
-O7	olive oil	0
-S8	on	[salad]
-O9	salad	0
-S7	contains	{olive oil}
-//
-O10	oregano	0
-S6	in	[container]
-O9	salad	0
-S7	contains	{olive oil}
+O10	salt	0
+S2	in	[shaker]
+O12	pepper	0
+S2	in	[shaker]
+O1	glass	0
+S3	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce,Tabasco sauce}
 M4	sprinkle	<Assumed>
-O10	oregano	0
-S8	on	[salad]
-O9	salad	0
-S7	contains	{oregano}
+O10	salt	0
+S2	in	[glass]
+O12	pepper	0
+S2	in	[glass]
+O1	glass	0
+S3	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce,Tabasco sauce,salt,pepper}
 //
-O9	salad	0
-S7	contains	{tomato,cucumber,onion,olive,feta cheese,olive oil,oregano}
-O12	salad tongs	0
-S1	clean
-M5	toss	<Assumed>
-O9	salad	0
-S9	mixed
-O12	salad tongs	0
-S3	dirty
+O13	stirrer	0
+S6	clean
+O1	glass	0
+S3	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce,Tabasco sauce,salt,pepper}
+M5	stir	<Assumed>
+O13	stirrer	0
+S7	used
+O1	glass	0
+S3	contains	{mixed cocktail}
+//
+O15	celery stalk	0
+S4	whole
+O1	glass	0
+S3	contains	{mixed cocktail}
+M6	garnish	<Assumed>
+O15	celery stalk	0	!
+S2	in	[glass]
+O1	glass	0	!
+S3	contains	{mixed cocktail}
+S8	garnished with celery stalk
 //

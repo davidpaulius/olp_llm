@@ -8,17 +8,17 @@
 
 (:constants
 	; objects from provided FOON subgraph:
-	bowl - object
-	cucumber - object
-	feta_cheese - object
-	knife - object
-	olive - object
-	olive_oil - object
-	onion - object
-	oregano - object
-	salad - object
-	salad_tongs - object
-	tomato - object
+	celery_stalk - object
+	glass - object
+	ice_cubes - object
+	lemon - object
+	pepper - object
+	salt - object
+	stirrer - object
+	tabasco_sauce - object
+	tomato_juice - object
+	vodka - object
+	worcestershire_sauce - object
 
 	; objects used in Agostini et al. 2021 - https://arxiv.org/abs/2007.08251
 	air - object
@@ -42,242 +42,205 @@
 	(is-spread ?obj_1 - object)
 )
 
-(:action slice_tomato_0
-	; description: <tomato knife slice tomato knife >
+(:action place_0
+	; description: <ice_cubes glass place ice_cubes glass >
 	:parameters ( )
 	:precondition (and
-		(is-whole tomato)
-		(under tomato table)
-		(on table tomato)
-		(under knife table)
-		(on table knife)
+		(under ice_cubes table)
+		(on table ice_cubes)
+		(in glass air)
+		(under glass table)
+		(on table glass)
 	)
 	:effect (and
 		; new effects of executing this functional unit:
-		(is-sliced tomato)
+		(in glass ice_cubes)
+		(under ice_cubes glass)
 
 		; preconditions that did not get changed in some way:
-		(under tomato table)
-		(on table tomato)
-		(under knife table)
-		(on table knife)
+		(under glass table)
+		(on table glass)
 
 		; negated preconditions:
-		(not (is-whole tomato) )
+		(not (in glass air) )
+		(not (under ice_cubes table) )
 	)
 )
 
-(:action slice_cucumber_1
-	; description: <cucumber knife slice cucumber knife >
+(:action pour_1
+	; description: <vodka glass pour vodka glass >
 	:parameters ( )
 	:precondition (and
-		(is-whole cucumber)
-		(under cucumber table)
-		(on table cucumber)
-		(under knife table)
-		(on table knife)
+		(in bottle vodka)
+		(under vodka bottle)
+		(under glass table)
+		(on table glass)
 	)
 	:effect (and
 		; new effects of executing this functional unit:
-		(is-sliced cucumber)
+		(in glass vodka)
+		(under vodka glass)
 
 		; preconditions that did not get changed in some way:
-		(under cucumber table)
-		(on table cucumber)
-		(under knife table)
-		(on table knife)
+		(in bottle vodka)
+		(under glass table)
+		(on table glass)
+	)
+)
+
+(:action add_2
+	; description: <tomato_juice glass add tomato_juice glass >
+	:parameters ( )
+	:precondition (and
+		(in bottle tomato_juice)
+		(under tomato_juice bottle)
+		(under glass table)
+		(on table glass)
+	)
+	:effect (and
+		; new effects of executing this functional unit:
+		(in glass tomato_juice)
+		(under tomato_juice glass)
+
+		; preconditions that did not get changed in some way:
+		(in bottle tomato_juice)
+		(under glass table)
+		(on table glass)
+	)
+)
+
+(:action squeeze_3
+	; description: <lemon glass squeeze lemon glass >
+	:parameters ( )
+	:precondition (and
+		(is-whole lemon)
+		(under lemon table)
+		(on table lemon)
+		(under glass table)
+		(on table glass)
+	)
+	:effect (and
+		; new effects of executing this functional unit:
+
+		; preconditions that did not get changed in some way:
+		(is-whole lemon)
+		(under lemon table)
+		(on table lemon)
+		(under glass table)
+		(on table glass)
+	)
+)
+
+(:action add_4
+	; description: <worcestershire_sauce glass add worcestershire_sauce glass >
+	:parameters ( )
+	:precondition (and
+		(in bottle worcestershire_sauce)
+		(under worcestershire_sauce bottle)
+		(under glass table)
+		(on table glass)
+	)
+	:effect (and
+		; new effects of executing this functional unit:
+		(in glass worcestershire_sauce)
+		(under worcestershire_sauce glass)
+
+		; preconditions that did not get changed in some way:
+		(in bottle worcestershire_sauce)
+		(under glass table)
+		(on table glass)
+	)
+)
+
+(:action add_5
+	; description: <tabasco_sauce glass add tabasco_sauce glass >
+	:parameters ( )
+	:precondition (and
+		(in bottle tabasco_sauce)
+		(under tabasco_sauce bottle)
+		(under glass table)
+		(on table glass)
+	)
+	:effect (and
+		; new effects of executing this functional unit:
+		(in glass tabasco_sauce)
+		(under tabasco_sauce glass)
+
+		; preconditions that did not get changed in some way:
+		(in bottle tabasco_sauce)
+		(under glass table)
+		(on table glass)
+	)
+)
+
+(:action sprinkle_6
+	; description: <salt pepper glass sprinkle salt pepper glass >
+	:parameters ( )
+	:precondition (and
+		(in shaker salt)
+		(under salt shaker)
+		(in shaker pepper)
+		(under pepper shaker)
+		(under glass table)
+		(on table glass)
+	)
+	:effect (and
+		; new effects of executing this functional unit:
+		(in glass salt)
+		(under salt glass)
+		(in glass pepper)
+		(under pepper glass)
+
+		; preconditions that did not get changed in some way:
+		(in shaker salt)
+		(in shaker pepper)
+		(under glass table)
+		(on table glass)
+	)
+)
+
+(:action stir_ingredients_7
+	; description: <stirrer glass stir stirrer glass >
+	:parameters ( )
+	:precondition (and
+		(under stirrer table)
+		(on table stirrer)
+		(under glass table)
+		(on table glass)
+	)
+	:effect (and
+		; new effects of executing this functional unit:
+
+		; preconditions that did not get changed in some way:
+		(under stirrer table)
+		(on table stirrer)
+		(under glass table)
+		(on table glass)
+	)
+)
+
+(:action garnish_8
+	; description: <celery_stalk glass garnish celery_stalk glass >
+	:parameters ( )
+	:precondition (and
+		(is-whole celery_stalk)
+		(under celery_stalk table)
+		(on table celery_stalk)
+		(under glass table)
+		(on table glass)
+	)
+	:effect (and
+		; new effects of executing this functional unit:
+		(in glass celery_stalk)
+		(under celery_stalk glass)
+
+		; preconditions that did not get changed in some way:
+		(is-whole celery_stalk)
+		(under glass table)
+		(on table glass)
 
 		; negated preconditions:
-		(not (is-whole cucumber) )
-	)
-)
-
-(:action slice_onion_2
-	; description: <onion knife slice onion knife >
-	:parameters ( )
-	:precondition (and
-		(is-whole onion)
-		(under onion table)
-		(on table onion)
-		(under knife table)
-		(on table knife)
-	)
-	:effect (and
-		; new effects of executing this functional unit:
-		(is-sliced onion)
-
-		; preconditions that did not get changed in some way:
-		(under onion table)
-		(on table onion)
-		(under knife table)
-		(on table knife)
-
-		; negated preconditions:
-		(not (is-whole onion) )
-	)
-)
-
-(:action slice_olive_3
-	; description: <olive knife slice olive knife >
-	:parameters ( )
-	:precondition (and
-		(is-whole olive)
-		(under olive table)
-		(on table olive)
-		(under knife table)
-		(on table knife)
-	)
-	:effect (and
-		; new effects of executing this functional unit:
-		(is-sliced olive)
-
-		; preconditions that did not get changed in some way:
-		(under olive table)
-		(on table olive)
-		(under knife table)
-		(on table knife)
-
-		; negated preconditions:
-		(not (is-whole olive) )
-	)
-)
-
-(:action crumble_4
-	; description: <feta_cheese crumble feta_cheese >
-	:parameters ( )
-	:precondition (and
-		(is-whole feta_cheese)
-		(under feta_cheese table)
-		(on table feta_cheese)
-	)
-	:effect (and
-		; new effects of executing this functional unit:
-
-		; preconditions that did not get changed in some way:
-		(is-whole feta_cheese)
-		(under feta_cheese table)
-		(on table feta_cheese)
-	)
-)
-
-(:action combine_5
-	; description: <tomato cucumber onion olive feta_cheese bowl combine tomato cucumber onion olive feta_cheese bowl >
-	:parameters ( )
-	:precondition (and
-		(is-sliced tomato)
-		(under tomato table)
-		(on table tomato)
-		(is-sliced cucumber)
-		(under cucumber table)
-		(on table cucumber)
-		(is-sliced onion)
-		(under onion table)
-		(on table onion)
-		(is-sliced olive)
-		(under olive table)
-		(on table olive)
-		(under feta_cheese table)
-		(on table feta_cheese)
-		(in bowl air)
-		(under bowl table)
-		(on table bowl)
-	)
-	:effect (and
-		; new effects of executing this functional unit:
-		(in bowl tomato)
-		(under tomato bowl)
-		(in bowl cucumber)
-		(under cucumber bowl)
-		(in bowl onion)
-		(under onion bowl)
-		(in bowl olive)
-		(under olive bowl)
-		(in bowl feta_cheese)
-		(under feta_cheese bowl)
-
-		; preconditions that did not get changed in some way:
-		(is-sliced tomato)
-		(is-sliced cucumber)
-		(is-sliced onion)
-		(is-sliced olive)
-		(under bowl table)
-		(on table bowl)
-
-		; negated preconditions:
-		(not (in bowl air) )
-		(not (under tomato table) )
-		(not (in bowl air) )
-		(not (under cucumber table) )
-		(not (in bowl air) )
-		(not (under onion table) )
-		(not (in bowl air) )
-		(not (under olive table) )
-		(not (in bowl air) )
-		(not (under feta_cheese table) )
-	)
-)
-
-(:action drizzle_6
-	; description: <olive_oil salad drizzle olive_oil salad >
-	:parameters ( )
-	:precondition (and
-		(in bottle olive_oil)
-		(under olive_oil bottle)
-		(in bowl salad)
-		(under salad bowl)
-	)
-	:effect (and
-		; new effects of executing this functional unit:
-		(on salad olive_oil)
-		(under olive_oil salad)
-		(under salad table)
-		(on table salad)
-
-		; preconditions that did not get changed in some way:
-		(in bottle olive_oil)
-		(in bowl salad)
-	)
-)
-
-(:action sprinkle_7
-	; description: <oregano salad sprinkle oregano salad >
-	:parameters ( )
-	:precondition (and
-		(in container oregano)
-		(under oregano container)
-		(under salad table)
-		(on table salad)
-	)
-	:effect (and
-		; new effects of executing this functional unit:
-		(on salad oregano)
-		(under oregano salad)
-
-		; preconditions that did not get changed in some way:
-		(in container oregano)
-		(under salad table)
-		(on table salad)
-	)
-)
-
-(:action toss_8
-	; description: <salad salad_tongs toss salad salad_tongs >
-	:parameters ( )
-	:precondition (and
-		(under salad table)
-		(on table salad)
-		(under salad_tongs table)
-		(on table salad_tongs)
-	)
-	:effect (and
-		; new effects of executing this functional unit:
-		(is-mixed LOC)
-
-		; preconditions that did not get changed in some way:
-		(under salad table)
-		(on table salad)
-		(under salad_tongs table)
-		(on table salad_tongs)
+		(not (under celery_stalk table) )
 	)
 )
 
