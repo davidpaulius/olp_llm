@@ -1,23 +1,53 @@
 #	FOON Prototype
-#	-- Task Prompt: I have a red block, a green block, and a blue block on a table: how do I stack them such that the colours are in alphabetical order?
+#	-- Task Prompt: I am packing Christmas gifts. I have 2 white toys, 1 red toy, and 3 green toys. I also have a white box and a green box. Which toys can I pack such that each box contains toys of the same colour?
 //
-O0	green block	0
+O0	first white toy	0
 S0	on	[table]
-O0	blue block	0
-S0	on	[table]
+O0	white box	0
+S0	empty
 M0	Pick and Place	<Assumed>
-O0	green block	0
-S0	on	[blue block]
-O0	blue block	0
-S0	under	[green block]
+O0	first white toy	0
+S0	in	[white box]
+O0	white box	0
+S0	contains	{first white toy}
 //
-O0	red block	0
+O0	second white toy	0
 S0	on	[table]
-O0	green block	0
-S0	on	[blue block]
+O0	white box	0
+S0	contains	{first white toy}
 M0	Pick and Place	<Assumed>
-O0	red block	0	!
-S0	on	[green block]
-O0	green block	0	!
-S0	under	[red block]
+O0	second white toy	0
+S0	in	[white box]
+O0	white box	0
+S0	contains	{first white toy,second white toy}
+//
+O0	first green toy	0
+S0	on	[table]
+O0	green box	0
+S0	empty
+M0	Pick and Place	<Assumed>
+O0	first green toy	0	!
+S0	in	[green box]
+O0	green box	0	!
+S0	contains	{first green toy}
+//
+O0	second green toy	0
+S0	on	[table]
+O0	green box	0
+S0	contains	{first green toy}
+M0	Pick and Place	<Assumed>
+O0	second green toy	0
+S0	in	[green box]
+O0	green box	0
+S0	contains	{first green toy,second green toy}
+//
+O0	third green toy	0
+S0	on	[table]
+O0	green box	0
+S0	contains	{first green toy,second green toy}
+M0	Pick and Place	<Assumed>
+O0	third green toy	0	!
+S0	in	[green box]
+O0	green box	0	!
+S0	contains	{first green toy,second green toy,third green toy}
 //

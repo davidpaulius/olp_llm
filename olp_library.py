@@ -85,10 +85,11 @@ def generate_OLP(query_task, incontext_file, llm_model, verbose=True):
     # NOTE: here is the list of instructions given to the LLM for generating a high-level plan as part of stage 1:
     system_prompt = "You are a language model that generates concise high-level plans for arbitrary tasks involving object manipulation."\
         " When generating high-level plans, you must observe the following rules:\n"\
-        " 1. Only focus on what happens to objects.\n"\
-        " 2. Stay consistent with object names."\
-        " 3. Assume all required objects are available on the table. You do not need to retrieve, wash, or clean objects."\
-        " 4. Use one verb per step. The only exception is that you must combine 'pick' and 'place' into a single step using the action 'pick and place'."\
+        " 1. Only focus on what happens to objects that are relevant to the task. You may ignore objects that do not match the prompt.\n"\
+        " 2. Stay consistent with object names.\n"\
+        " 3. Assume all required objects are available on the table. You do not need to retrieve, wash, or clean objects.\n"\
+        " 4. Use one verb per step. The only exception is that you must combine 'pick' and 'place' into a single step using the action 'pick and place'.\n"\
+        " 5. Only focus on one object per step (if there are multiple object instances, break them into separate steps)."
 
     stage1_user_msg = "After listing the high-level plan, list all the unique objects used or needed in the plan,"\
         " including the object created after solving the task or objects naturally containing other objects, ignoring state changes to those objects."\
@@ -123,9 +124,12 @@ def generate_OLP(query_task, incontext_file, llm_model, verbose=True):
         " You must strictly refer to the object names from this set:{}.".format(unique_objects) + \
         " Do not skip any steps."\
         " Keep states atomic and list each state separately."\
+        " If an object retains a precondition state, repeat it in its \"effects\" list."\
         " If an object has ingredients in it, use the word \"contains X\", where \"X\" refers to an ingredient."\
-        " When considering geometric spaces, use the states \"in\", \"on\", and \"under\" (e.g., \"in cup\")"\
-        " You can infer the tools or utensils needed to perform a given action or the container that ingredients can be found in (e.g., \"salt\" may be in a \"shaker\")."\
+        " When considering geometric spaces, use the states \"in\", \"on\", and \"under\" (e.g., \"in cup\")."\
+        " If a step mentions mixing, you should list all objects being mixed or combined in that step."\
+        "\n\nYou can infer the tools or utensils needed to perform a given action."\
+        " You can also infer the containers that ingredients can be found in (e.g., \"salt\" may be in a \"shaker\" or \"water\" may be in a bottle)."\
         " Also, you should assume all objects are on a table (use the word \"table\" instead of \"surface\" wherever possible).\n\n"\
         "Most importantly, for the final action, you should mention all the final states of all objects used in the plan in the \"preconditions\" and \"effects\" section."\
         "\n\nFormat your output as a JSON structure like in the following example:"
@@ -161,15 +165,26 @@ def generate_OLP(query_task, incontext_file, llm_model, verbose=True):
         for olp_unit in stage2_response.split("\n\n"):
             object_level_plan.append(parse_regex_unit(olp_unit))
 
-    # if verbose:
-    #     print("*************************************************************************\n",
-    #           "Stage 3 Prompting\n",
-    #           "*************************************************************************")
+    if verbose:
+        print("*************************************************************************\n",
+              "Stage 3 Prompting\n",
+              "*************************************************************************")
+
+    stage3_prompt = "In which steps are there terminating states?"\
+        " Think back to the high-level plan generated above."\
+        " List the step numbers in an array, such as: [X, Y, Z], where X to Z are numbers."
+    message.extend([{"role": "user", "content": stage3_prompt}])
+
+    _, stage3_response = prompt_LLM(message, llm_model, verbose)
+    print(stage3_response, '\n')
+
+    stage3_terminalSteps = eval(re.findall(r'\[.+?\]', stage3_response)[0])
 
     return {
         'PlanSketch': stage1_response,
         'OLP': object_level_plan,
-        'RelevantObjects': unique_objects
+        'TerminalSteps': stage3_terminalSteps,
+        'RelevantObjects': unique_objects,
     }
 
 
@@ -325,15 +340,18 @@ def create_functionalUnit_ver1(plan_step, plan_objects):
     return functionalUnit
 
 
-def create_functionalUnit_ver2(olp, index):
+def create_functionalUnit_ver2(llm_output, index):
     # NOTE: version 2 -- strict JSON format
 
     # -- create a functional unit prototype:
     functionalUnit = fga.FOON.FunctionalUnit()
 
-    used_objects = olp['Instructions'][index]['RelatedObjects']
-    action = olp['Instructions'][index]['Action']
-    print(f"Creating functional unit for Step {olp['Instructions'][index]['Step']}: {olp['Instructions'][index]['Instruction']}")
+    olp = llm_output['OLP']['Instructions'][index]
+    olp_objects = llm_output['OLP']['CompleteObjectSet']
+
+    used_objects = olp['RelatedObjects']
+    action = olp['Action']
+    print(f"Creating functional unit for Step {olp['Step']}: {olp['Instruction']}")
     print("-> related objects:", used_objects)
 
     geometric_states = ['in', 'on', 'under', 'contains']
@@ -349,7 +367,7 @@ def create_functionalUnit_ver2(olp, index):
 
         try:
             # check object state changes in step
-            object_state_changes = olp['Instructions'][index]['State'][obj]
+            object_state_changes = olp['State'][obj]
         except KeyError:
             print(f'Missing object: {obj}')
             continue
@@ -366,7 +384,7 @@ def create_functionalUnit_ver2(olp, index):
 
                 parsed_state = state
 
-                for O in olp['CompleteObjectSet']:
+                for O in olp_objects:
                     if O in state:
                         # -- check if there is no object left after removing the related object given by the LLM:
                         state_sans_obj = parsed_state.replace(O, "").strip()

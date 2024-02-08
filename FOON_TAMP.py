@@ -1,7 +1,7 @@
 '''
 FOON_TAMP (FOON-TAMP Framework: From Planning to Execution):
 -------------------------------------------------------------
--- Written and maintained by: 
+-- Written and maintained by:
     * David Paulius (dpaulius@cs.brown.edu / davidpaulius@tum.de)
 
 -- Special thanks to Alejandro Agostini (alejandro.agostini@uibk.ac.at) for references and help in legacy code,
@@ -9,7 +9,7 @@ FOON_TAMP (FOON-TAMP Framework: From Planning to Execution):
 
 NOTE: If using this program and/or annotations provided by our lab, please kindly cite our papers
 	so that others may find our work:
-* Paulius and Agostini 2022 - https://arxiv.org/abs/2207.05800 
+* Paulius and Agostini 2022 - https://arxiv.org/abs/2207.05800
 * Paulius et al. 2016 - https://arxiv.org/abs/1902.01537
 * Paulius et al. 2018 - https://arxiv.org/abs/1807.02189
 '''
@@ -82,7 +82,7 @@ planner_to_use = 'fast-downward'
 # NOTE: algorithm is a key in the configs dictionary, while
 #   heuristic is an index for the list of configs per algorithm:
 configs = {
-    'astar': ['astar(lmcut())', 'astar(ff())'], 
+    'astar': ['astar(lmcut())', 'astar(ff())'],
     'eager': ['eager(lmcut())', 'eager(ff())'],
     'lazy': ['lazy(lmcut())', 'lazy(ff())']
 }
@@ -107,7 +107,7 @@ matlab_engine = None
 ####################################################################################################
 # NOTE: these are various flags to trigger certain actions:
 
-# -- flag_perception :- this is to activate the perception module of detecting the position 
+# -- flag_perception :- this is to activate the perception module of detecting the position
 #                       and orientation of objects in the scene
 flag_perception = False
 
@@ -117,7 +117,7 @@ flag_randomize_scene = False
 
 # -- flag_dropout :- this is to trigger random dropout of ingredients in FOON macro-planning;
 #                   think of this as making certain FOON nodes skippable.
-flag_dropout = False        
+flag_dropout = False
 
 # -- flag_action_contexts :- this is to trigger use of action contexts (loading them and applying them to simulation)
 flag_action_contexts = False
@@ -240,7 +240,7 @@ def _preliminaries():
     micro_plan_file = os.path.splitext(FOON_subgraph_file)[0] + '_micro.plan'
 
     # -- create a new folder for the generated problem files and their corresponding plans:
-    micro_problems_dir = './micro_problems-' + Path(FOON_subgraph_file).stem + '-scenario=' + scenario 
+    micro_problems_dir = './micro_problems-' + Path(FOON_subgraph_file).stem + '-scenario=' + scenario
     if not os.path.exists(micro_problems_dir):
         os.makedirs(micro_problems_dir)
 
@@ -262,7 +262,7 @@ def _preliminaries():
         ftp._convert_to_PDDL('OCP', ingredient_dropout=0)
 
     print(' -- [FOON-TAMP] : Translated FOON into macro-level domain and problem files!')
-    
+
     # -- try to load the FOON-to-CoppeliaSim module before attemptingt to run any simulation operations:
     if flag_perception:
         try:
@@ -290,10 +290,10 @@ def _preliminaries():
             # -- randomize placement of robot gripper and objects in the scene:
             ftc._randomizeScene()
 
-            # -- reposition the robot's gripper location 
+            # -- reposition the robot's gripper location
             #       (if "no-start" is given, we are using DMPs fixed at the location "start_4")
             ftc._repositionRobot(target_location=(None if not flag_ignore_start else 'start_4'))
-            
+
             # NOTE: we will only use fixed starting locations!
             flag_ignore_start = False
 
@@ -337,7 +337,7 @@ def _preliminaries():
         if not matlab_engine:
             matlab_engine = matlab.engine.start_matlab()
         print(' done!')
-        
+
         # -- setting the path of the MATLAB engine to the location of the action contexts dataset
         #       and motion planning code:
         matlab_engine.addpath('./dmp_code/coppelia_remoteAPI', nargout=0)
@@ -473,15 +473,49 @@ def _parseDomainPDDL(file_name):
     return planning_operators
 #enddef
 
+def _defineMicroDomain(preconditions):
+    global micro_problems_dir, micro_domain_file
 
-def _defineMicroProblem(macro_PO_name, preconditions, effects, is_hand_empty=True):
+    # -- the template file contains all of the default skills for our robot:
+    template_file = micro_domain_file
+
+    # -- we are going to inject new objects into the
+    file_name = os.path.join(micro_problems_dir, micro_domain_file)
+    pddl_file = open(file_name, 'w')
+
+    # -- identifying all objects that are being referenced as preconditions:
+    all_objects = set()
+    for pred in preconditions:
+        predicate_parts = pred[1:-1].split(' ')
+        # -- we are just reviewing all of the objects referenced by predicates...
+        all_objects.add(predicate_parts[1])
+        if len(predicate_parts) > 2:
+            all_objects.add(predicate_parts[2])
+
+    with open(template_file) as f:
+        domain_file_lines = f.readlines()
+        for L in domain_file_lines:
+            if '(:constants' in L:
+                pddl_file.write(f'{L}')
+                for O in all_objects - set(['air', 'robot', 'hand']):
+                    pddl_file.write(f'\t\t{O} - object\n')
+                continue
+
+            pddl_file.write(f'{L}')
+
+    return file_name
+#enddef
+
+
+def _defineMicroProblem(macro_PO_name, preconditions, effects, is_hand_empty=True, robot_location=None):
     global flag_perception
     if flag_perception: _runPerception()
 
     global on_object_layout, under_object_layout
 
     # -- create the file we are going to write to:
-    global micro_problems_dir 
+    global micro_problems_dir, micro_domain_file
+
     file_name = str(micro_problems_dir) + '/' + str(macro_PO_name) + '_problem.pddl'
     pddl_file = open(file_name, 'w')
 
@@ -526,6 +560,14 @@ def _defineMicroProblem(macro_PO_name, preconditions, effects, is_hand_empty=Tru
 
     free_objects = all_objects - on_objects
 
+    if robot_location is None:
+        pddl_file.write('\t; making the robot start at a position not close to any objects:\n')
+        flag = True
+        for O in all_objects - set(['air', 'robot', 'hand']):
+            pddl_file.write(f'\t(not (at {O} robot))\n')
+        pddl_file.write('\t(at robot robot)\n')
+        pddl_file.write('\n')
+
     if flag_perception:
         # -- we will write the current object layout as obtained from the "perception" step.
 
@@ -533,7 +575,7 @@ def _defineMicroProblem(macro_PO_name, preconditions, effects, is_hand_empty=Tru
 
         pddl_file.write(
             '\n\t; object layout from current state of environment (from perception):\n')
-        
+
         sorted_objects = list(on_object_layout.keys())
         for obj in sorted_objects:
             # -- writing the "on" relation predicate:
@@ -542,7 +584,7 @@ def _defineMicroProblem(macro_PO_name, preconditions, effects, is_hand_empty=Tru
                 #       we will consider it as being "contained" inside of the object:
                 on_pred = str('(in ' + obj + ' ' + on_object_layout[obj] + ')')
                 pddl_file.write('\t' + on_pred + '\n')
-        
+
                 written_predicates.append(on_pred)
 
                 on_pred = str('(on ' + obj + ' ' + 'air' + ')')
@@ -617,7 +659,7 @@ def _defineMicroProblem(macro_PO_name, preconditions, effects, is_hand_empty=Tru
                 continue
 
             else:
-                # -- in this case, we should only be considering predicates 
+                # -- in this case, we should only be considering predicates
                 #       of relation "in":
                 if pred_parts[0] != 'in':
                     continue
@@ -785,7 +827,7 @@ def _defineMicroProblem(macro_PO_name, preconditions, effects, is_hand_empty=Tru
 
     if flag_perception:
         # -- we will check for the last step manually (i.e., find the max):
-        state_history[max(state_history.keys())+1] = {  'on' : on_object_layout, 
+        state_history[max(state_history.keys())+1] = {  'on' : on_object_layout,
                                                         'under' : under_object_layout}
 
     pddl_file.write('))\n')
@@ -902,7 +944,7 @@ def _runPerception(connect_to_sim=False):
                         pass
 
 
-    def _runPerception_with_sim():    
+    def _runPerception_with_sim():
         # -- get the layout of table cells and objects from scene in CoppeliaSim:
         global on_object_layout, under_object_layout, in_object_layout, table_layout
 
@@ -921,16 +963,16 @@ def _runPerception(connect_to_sim=False):
     if not flag_skip_execution or connect_to_sim:
         _runPerception_with_sim()
     else:
-        # -- in this case, we will manually update the state of the environment 
+        # -- in this case, we will manually update the state of the environment
         #       based on the effects of the last-defined micro-problem.
         _runPerception_no_sim()
-    
+
     return
 #endef
 
 
 def _checkStateSatisfiability(prev_action=None, next_action=None):
-    # NOTE: this function is to be used in conjunction with perception to make sure that we have 
+    # NOTE: this function is to be used in conjunction with perception to make sure that we have
     #       satisfied the *effects* of the previous action and the *preconditions* of the following action.
 
     # -- we have two possible situations:
@@ -963,7 +1005,7 @@ def _checkStateSatisfiability(prev_action=None, next_action=None):
 
             intended_effects.append(grounded_effect)
 
-        # -- now, we'll check if the preconditions and effects have been met, 
+        # -- now, we'll check if the preconditions and effects have been met,
         #       reflected by the current state of the environment:
         unmet_states = []
 
@@ -1039,7 +1081,7 @@ def _checkStateSatisfiability(prev_action=None, next_action=None):
             elif 'in' in pred_parts[0]:
                 if obj1 not in in_object_layout:
                     return False
-                
+
                 # -- we can check if an object is *NOT* listed either in the "in_object_layout" or "under_object_layout" dicts:
                 if obj2 not in in_object_layout[obj1] and obj1 not in under_object_layout[obj2]:
                     return False
@@ -1109,7 +1151,7 @@ def _checkStateSatisfiability(prev_action=None, next_action=None):
 
             intended_preconditions.append(grounded_preconds[0] if len(grounded_preconds) == 1 else grounded_preconds)
 
-        # -- now, we'll check if the preconditions and effects have been met, 
+        # -- now, we'll check if the preconditions and effects have been met,
         #       reflected by the current state of the environment:
         unmet_states = []
 
@@ -1153,7 +1195,7 @@ def _checkStateSatisfiability(prev_action=None, next_action=None):
     if not prev_action:
         # -- solely evaluate whether the preconditions of the about-to-be-executed action have been met or not:
         return _check_if_preconditions_met()
-    
+
     if not next_action:
         # -- solely evaluate whether the effects of the last executed action have been met or not:
         return _check_if_effects_met()
@@ -1173,7 +1215,7 @@ def _generalizeActionContext(table_layout, under_object_layout, action_now, acti
     import math
 
     now_obj, prev_obj, next_obj = None, None, None
- 
+
     now_obj_location, prev_obj_location, next_obj_location = [], [], []
 
     # -- selecting the appropriate target object:
@@ -1197,13 +1239,13 @@ def _generalizeActionContext(table_layout, under_object_layout, action_now, acti
     #       for both *action_prev* and *action_next* target locations:
 
     if action_prev or tip_location:
-        
+
         if not action_prev:
-            # -- here, we will deal with the gripper's starting position 
+            # -- here, we will deal with the gripper's starting position
             #       (based on a special tile), since the previous action is "None":
             prev_obj = tip_location
         else:
-            # -- selecting the appropriate target object 
+            # -- selecting the appropriate target object
             #       (i.e., looking at the apposite table tile):
             action_prev_parts = action_prev[1:-1].split(' ')
             prev_obj = action_prev_parts[-1]
@@ -1241,7 +1283,7 @@ def _generalizeActionContext(table_layout, under_object_layout, action_now, acti
             # -- store the relative coordinates only if there was something calculated:
             coordinates['action_prev'] = (
                 coordinates['action_prev'][0], coordinates['action_prev'][1])
-            locations['action_prev'] = prev_obj        
+            locations['action_prev'] = prev_obj
     #endif
 
     if action_next:
@@ -1334,7 +1376,7 @@ def _parseActionContexts(A):
 
 def _findPlan(domain_file, problem_file, output_plan_file=None):
     # NOTE: define plan execution function that can be called for different parameters:
-   
+
     global path_to_planners, planner_to_use, configs, algorithm, heuristic
 
     # -- this will store the output that would normally be seen in the terminal
@@ -1347,7 +1389,7 @@ def _findPlan(domain_file, problem_file, output_plan_file=None):
         # -- you can use a different algorithm for more optimal or satisficing results:
         method = configs[algorithm][heuristic]
         command = ['python3', str(path_to_planners[planner_to_use]), '--plan-file', output_plan_file, domain_file, problem_file, '--search', method]
-            
+
     elif planner_to_use == 'PDDL4J':
         command = ['java', '-jar', str(path_to_planners[planner_to_use]),  '-o', domain_file, '-f', problem_file]
 
@@ -1357,8 +1399,9 @@ def _findPlan(domain_file, problem_file, output_plan_file=None):
 
     try:
         planner_output = subprocess.check_output(command)
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as e:
         print('  -- [FOON-TAMP] : Error with planner execution! (planner used: ' + planner_to_use + ')')
+        print(f'     -- Error code: {e.returncode} -- {e.output}')
         pass
     # endtry
 
@@ -1381,11 +1424,11 @@ def _checkPlannerOutput(output):
 
 def main():
     global planner_to_use
-    
+
     # NOTE: several important flags that will control the flow of planning and execution:
     global flag_perception, flag_skip_execution, flag_collision, flag_skip_demo
     global flag_action_contexts, action_contexts
- 
+
     # -- execute function for preliminary operations (e.g., loading the scene):
     _preliminaries()
 
@@ -1401,12 +1444,12 @@ def main():
 
     # -- checking to see if a macro level plan has been found (FD allows exporting to a file):
     outcome = _findPlan(
-        domain_file=ftp.FOON_domain_file,   # NOTE: FOON_to_PDDL object will already contain the names of the 
+        domain_file=ftp.FOON_domain_file,   # NOTE: FOON_to_PDDL object will already contain the names of the
         problem_file=ftp.FOON_problem_file,  #   corresponding macro-level domain and problem files
         output_plan_file=macro_plan_file
     )
 
-    # TODO: write planning pipeline for other planners? 
+    # TODO: write planning pipeline for other planners?
 
     if _checkPlannerOutput(output=outcome):
         print("  -- [FOON-TAMP] : A macro-level plan for '" + str(FOON_subgraph_file) + "' was found!")
@@ -1428,15 +1471,15 @@ def main():
 
         num_failures = 0
 
-        # -- num_exact_AC_matches :- count of the number of action contexts 
+        # -- num_exact_AC_matches :- count of the number of action contexts
         #           used that matched an exact context in our AC dataset:
         num_exact_AC_matches = 0
 
-        # -- num_similar_AC_matches :- count of the number of action contexts 
+        # -- num_similar_AC_matches :- count of the number of action contexts
         #           used that matched a similar context in our AC dataset:
         num_similar_AC_matches = 0
 
-        # -- num_demoed_ACs :- count of the number of action contexts 
+        # -- num_demoed_ACs :- count of the number of action contexts
         #           that needed to be demonstrated in this trial:
         num_demoed_ACs = 0
 
@@ -1458,8 +1501,8 @@ def main():
 
             # -- get the initial state of the environment:
             state_history[micro_count] = {'on' : on_object_layout, 'under' : under_object_layout}
-        
-        print('\n--------------------------------------------------------' 
+
+        print('\n--------------------------------------------------------'
             + '--------------------------------------------------------\n')
 
         for L in range(len(macro_plan_lines)):
@@ -1472,7 +1515,7 @@ def main():
                 macro_count += 1
 
                 macro_PO_name = macro_plan_lines[L][1:-2].strip()
- 
+
                 print(" -- [FOON-TAMP] : Searching for micro-level plan for '" + macro_PO_name + "' macro-PO...")
 
                 # -- try to find this step's matching planning operator definition:
@@ -1482,9 +1525,9 @@ def main():
                 if matching_PO_obj:
                     # -- create sub-problem file (i.e., at the micro-level):
                     micro_problem_file = _defineMicroProblem(
-                        macro_PO_name, 
-                        preconditions=matching_PO_obj.getPreconditions(), 
-                        effects=matching_PO_obj.getEffects(), 
+                        macro_PO_name,
+                        preconditions=matching_PO_obj.getPreconditions(),
+                        effects=matching_PO_obj.getEffects(),
                         is_hand_empty=flag
                     )
 
@@ -1494,8 +1537,8 @@ def main():
 
                     # -- try to find a sub-problem plan / solution:
                     outcome = _findPlan(
-                        domain_file=micro_domain_file, 
-                        problem_file=micro_problem_file, 
+                        domain_file=micro_domain_file,
+                        problem_file=micro_problem_file,
                         output_plan_file=str(micro_problems_dir + '/' + macro_PO_name + '_micro.plan')
                     )
 
@@ -1522,12 +1565,12 @@ def main():
                                 micro_step = micro_line.strip()
                                 micro_file_lines.append(micro_step)
 
-                                # -- print entire plan to the command line in format of X.Y, 
+                                # -- print entire plan to the command line in format of X.Y,
                                 #       where X is the macro-step count and Y is the micro-step count:
                                 count += 1
                                 print('\t\t\t' + str(macro_count) + '.' + str(count) + ' : ' + micro_step)
                             else:
-                                # -- this line will be in the format "; cost = X (unit cost)\n", 
+                                # -- this line will be in the format "; cost = X (unit cost)\n",
                                 #       where X is the total number of micro-steps in the file:
                                 total_cost += int(micro_line.split(' ')[3])
                             #endif
@@ -1538,7 +1581,7 @@ def main():
                         if flag_perception:
                             print('\n\t\t -- Executing micro plan...')
 
-                            print('\n--------------------------------------------------------' 
+                            print('\n--------------------------------------------------------'
                                 + '--------------------------------------------------------')
 
                         for x in range(len(micro_file_lines)):
@@ -1562,7 +1605,7 @@ def main():
 
                                 if not flag_skip_execution:
                                     print(' -- Checking if action preconditions are satisfied...')
-    
+
                                     # -- running perception to check the present state of the environment:
                                     _runPerception()
 
@@ -1571,7 +1614,7 @@ def main():
                                         print(on_object_layout)
                                         print(under_object_layout)
 
-                                    # -- now, we check if we satisfy the requirements of the action the robot 
+                                    # -- now, we check if we satisfy the requirements of the action the robot
                                     #       is about to execute (i.e., "action_now"):
                                     are_states_satisfied =_checkStateSatisfiability(next_action=action_now)
 
@@ -1612,7 +1655,7 @@ def main():
                                     # -- other motions such as mix, pour, sprinkle, etc. require the object to remain
                                     #       enclosed in the hand:
                                     gripper_action = 0
-                                
+
                                 action_now_parts = action_now[1:-1].split(' ')
                                 if action_now in ['mix', 'stir']:
                                     # -- change the property of the container being stirred (for sake of simulation):
@@ -1662,9 +1705,9 @@ def main():
                                             this_ac['dmps']['ini'] = matlab.double(action_contexts[A].dmps.ini.tolist())
                                             this_ac['dmps']['end'] = matlab.double(action_contexts[A].dmps.end.tolist())
                                             trajectory_data = matlab_engine.motion_planning(this_ac)
-                                            
+
                                             exact_action_context = A
-                                            
+
                                             num_exact_AC_matches += 1
 
                                             break
@@ -1736,9 +1779,9 @@ def main():
 
                                             # -- set either the previous or next action predicate to None if there are some disjoints:
                                             #if not action_prev:
-                                            #    pred_prev = None 
+                                            #    pred_prev = None
                                             # if not action_next:
-                                            #     pred_next = None 
+                                            #     pred_next = None
 
                                             existing_AC_name = action_contexts[A].action_now.name
                                             existing_AC_coord, existing_AC_table_cells = _generalizeActionContext(
@@ -1757,7 +1800,7 @@ def main():
                                             # -- checking if the preceding action coordinate matches:
 
                                             if not action_prev:
-                                                # -- this means that we are at the very beginning of execution, 
+                                                # -- this means that we are at the very beginning of execution,
                                                 #       where there is NO previous action:
 
                                                 # -- we will find a suitable action context based on two conditions:
@@ -1775,7 +1818,7 @@ def main():
 
                                             if str(existing_AC_coord['action_prev']) != str(this_AC_coord['action_prev']):
                                                 flag_same_coordinates = False
-                                            
+
                                             # if flag_check_next and str(existing_AC_coord['action_next']) != str(this_AC_coord['action_next']):
                                             #     flag_same_coordinates = False
 
@@ -1871,7 +1914,7 @@ def main():
 
                                             #   ... and run the motion planning method (from Alejandro's pipeline):
                                             trajectory_data = matlab_engine.motion_planning(this_ac)
- 
+
                                             if not flag_skip_execution:
                                                 print('  -- Executing action "' + action_now + '" (with AC #' + str(similar_action_context+1) + ')!')
                                                 ftc._replayAction_DMP(trajectory_data, gripper_action)
@@ -1896,18 +1939,18 @@ def main():
                                             AC_requiring_demo.append(missing_AC_info)
 
                                             if not flag_skip_execution:
-                                                # -- if we are using the simulation and demonstration setup, 
+                                                # -- if we are using the simulation and demonstration setup,
                                                 #       then we will ask the user to demonstrate the missing action:
                                                 print('\n  -- No similar action context for "' + action_now + '" found!')
 
                                                 # NOTE: in this case, a demonstration is required;
                                                 #  -- we will use the recordAction method from the demonstration code to start recording
                                                 #       from the present layout of the environment.
-                                                
+
                                                 if flag_skip_demo: return {'success': False}
 
                                                 response = input('  -- Demonstration for action "' +
-                                                    action_now + '" required!\n\tPress ENTER when ready! > ')                                            
+                                                    action_now + '" required!\n\tPress ENTER when ready! > ')
 
                                                 if response == 'end':
                                                     # -- this is to scrap the entire trial:
@@ -1939,7 +1982,7 @@ def main():
                                                             break
 
                                                     ftc.savemat(MAT_file_name, trajectory_data)
-                                                    
+
                                                     # NOTE: we only have to deal with a dictionary object in this case:
                                                     trajectory_data = np.array(trajectory_data['Target']['trajectory']).transpose().tolist()
 
@@ -1948,7 +1991,7 @@ def main():
                                                 else:
                                                     # -- if we just want to replay a specific action as we have in a .MAT file:
                                                     ftc._replayAction(trajectory_data, gripper_action)
-                                                    trajectory_data = np.array(trajectory_data['Target']['trajectory'].item()).transpose().tolist()  
+                                                    trajectory_data = np.array(trajectory_data['Target']['trajectory'].item()).transpose().tolist()
                                                 #endtry
 
                                                 # -- once we have recorded the trajectory, we can then directly add the new action context
@@ -1976,10 +2019,10 @@ def main():
                                     #endif
 
                                     if not flag_skip_execution:
-                                        # -- perform secondary motion for special actions 
+                                        # -- perform secondary motion for special actions
                                         #       (at this point, action_now == action_next):
-                                        ftc._performAuxiliarySteps( 
-                                            motion_name=this_ac['action_now']['name'], 
+                                        ftc._performAuxiliarySteps(
+                                            motion_name=this_ac['action_now']['name'],
                                             args=this_ac['action_now']['args'],
                                             macro_PO=all_macro_POs[macro_PO_name]
                                         )
@@ -1989,7 +2032,7 @@ def main():
                                 else:
                                     if not flag_skip_execution:
                                         # -- load the demonstrated trajectory file instead:
-                                        response = input('  -- Demonstration for action "' + action_now + '" required!\n\tPress ENTER when ready! > ')                                            
+                                        response = input('  -- Demonstration for action "' + action_now + '" required!\n\tPress ENTER when ready! > ')
                                         try:
                                             trajectory_data = ftc.loadmat(str(response), squeeze_me=True)
                                         except FileNotFoundError:
@@ -2000,12 +2043,12 @@ def main():
                                 #endif
 
                                 if not flag_skip_execution and ftc._checkGripperStatus(action_now, gripper_action) == False:
-                                    # -- this means that something went wrong with the micro plan, 
+                                    # -- this means that something went wrong with the micro plan,
                                     #       and so we will count this action as a failure:
                                     print('\n\t\t[ WARNING: step ' + str(macro_count) + ' -- (' + macro_PO_name + '):\taction failed! ]\n')
                                     num_failures += 1
                                 #end
-    
+
                                 print('-- [FOON-TAMP] :  Finished executing action "' + action_now + '"!')
 
                                 # -- do we need to run perception after each micro-action?
@@ -2014,7 +2057,7 @@ def main():
 
                                 if not flag_skip_execution:
                                     print('\n -- Checking if action effects have been satisfied...')
-    
+
                                     # -- check whether the executed action's effects have been satisfied/occurred:
                                     are_states_satisfied =_checkStateSatisfiability(prev_action=action_now)
 
@@ -2023,16 +2066,16 @@ def main():
 
                                 # -- record the state of the environment:
                                 state_history[micro_count] = {
-                                    'in' : in_object_layout, 
-                                    'on' : on_object_layout, 
+                                    'in' : in_object_layout,
+                                    'on' : on_object_layout,
                                     'under' : under_object_layout
                                 }
 
-                                print('\n--------------------------------------------------------' 
+                                print('\n--------------------------------------------------------'
                                             + '--------------------------------------------------------\n')
-            
+
                             #endif
-        
+
                             # -- now we will keep track of the executed action as the previous step:
                             action_prev = action_now
 
@@ -2092,9 +2135,9 @@ def main():
             if flag_skip_execution:
                 # -- if we skip the simulation, then this means we are performing the AC progression experiment:
                 return {
-                    'success': True if num_failures == 0 else False, 
-                    'exact_matches': num_exact_AC_matches, 
-                    'action_context_history': AC_history, 
+                    'success': True if num_failures == 0 else False,
+                    'exact_matches': num_exact_AC_matches,
+                    'action_context_history': AC_history,
                     'action_contexts_missing': AC_requiring_demo,
                     'micro_plan_length' : micro_count
                 }
@@ -2106,17 +2149,17 @@ def main():
                         print(state_history[X])
 
                 # -- otherwise, we return True/False depending on the success of this trial:
-                return {   
-                    'success': True if num_failures == 0 else False, 
-                    'exact_matches': num_exact_AC_matches, 
-                    'micro_plan_length': micro_count, 
+                return {
+                    'success': True if num_failures == 0 else False,
+                    'exact_matches': num_exact_AC_matches,
+                    'micro_plan_length': micro_count,
                     'history': state_history
                 }
             #endif
         #endif
     else:
         print("  -- [FOON-TAMP] : A macro-level plan for '" + str(FOON_subgraph_file) + "' was NOT found!")
-        # TODO: write planning pipeline for other planners? 
+        # TODO: write planning pipeline for other planners?
     #endif
 
     print()
@@ -2132,10 +2175,10 @@ if __name__ == '__main__':
                     [
                         'file=',    # -- name of the subgraph / universal FOON file used for translation and planning
                         'scenario=', # -- name of a JSON file containing properties and file name to use in CoppeliaSim / VREP
-                        'planner=', # -- type of planner to use in the pipeline (default: "FD" -- Fast-Downward) 
+                        'planner=', # -- type of planner to use in the pipeline (default: "FD" -- Fast-Downward)
                         'algorithm=', # -- type of searching algorithm to use
                         'heuristic=',   # -- type of heuristic to use for search for Fast-Downward (default: "lmcut()" -- landmark cut)
-                        'use_perception',   # -- flag to enable perception step before each functional unit is executed (default: False -- OFF) 
+                        'use_perception',   # -- flag to enable perception step before each functional unit is executed (default: False -- OFF)
                         'use_action_contexts',   # -- flag to enable use of action contexts for execution (default: False -- OFF)
                         'random',   # -- flag to enable randomized configuration of the scene
                         'dropout',  # -- flag to enable dropout of ingredients (automatic selection)
@@ -2223,9 +2266,9 @@ if __name__ == '__main__':
                 else:
                     print('  -- Invalid argument provided! Please review code for possible arguments.')
                     sys.exit()
-                    
+
             if planner_to_use == 'fast-downward':
-                # NOTE: Fast-Downward provides several kinds of heuristics; 
+                # NOTE: Fast-Downward provides several kinds of heuristics;
                 #           please check their documentation for more details.
                 if heuristic == 1:
                     print('  -- Using the FF heuristic with A* algorithm!')
