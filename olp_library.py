@@ -2,25 +2,17 @@
 import openai
 import json
 import sys
-import spacy
+import random
 import re
 import os
+# import spacy
 
 from pathlib import Path
 
-# NOTE: we need to import some files from the other FOON directory:
-FOON_to_PDDL_path = './foon_to_pddl/'
-if FOON_to_PDDL_path not in sys.path:
-    sys.path.append(FOON_to_PDDL_path)
-
-try:
-    import FOON_to_PDDL as ftp
-except ImportError:
-    print(" -- ERROR: Missing 'FOON_to_PDDL.py' file!")
-    sys.exit()
+##############################################################################################################
 
 FOON_API_path = './foon_to_pddl/foon_api'
-if FOON_to_PDDL_path not in sys.path:
+if FOON_API_path not in sys.path:
     sys.path.append(FOON_API_path)
 
 try:
@@ -32,111 +24,14 @@ except ImportError:
 
 ##############################################################################################################
 
-def create_functionalUnit(object_list, action_verb):
-    # -- create a blank functional unit (no object nodes nor motion node):
-    functionalUnit = fga.FOON.FunctionalUnit()
 
-    for obj in object_list:
-        # NOTE: each key is an object name (noun); we will assume that the ID is neglible
-        #   (since we can perform parsing):
+def prompt_LLM(given_prompt, model_name='gpt-4', verbose=False):
+    if verbose:
+        print(f"Model: {model_name}\nComplete prompt:")
+        print(json.dumps(given_prompt, indent=4))
 
-        # -- we will be looking for the keys referring to preconditions and effects 
-        #       ('input' and 'output' respectively)
-        for x in ['Precondition', 'Effect']:
-            if x in object_list[obj]:
-                # -- add an input node if we find that there is an "ini" entry:
-                new_object = fga.FOON.Object(objectLabel=obj) 
-                for state in object_list[obj][x]:
-                    if 'contains' in state['name']:
-                        new_object.addNewState([None, state['name'], None])
-                        new_object.addIngredient(state['related_obj'])
-                    else:
-                        new_object.addNewState([None, state['name'], state['related_obj']])
-                # -- add the node to the functional unit:
-                functionalUnit.addObjectNode(objectNode=new_object, is_input=(True if x == 'input' else False))
-
-    # -- make a new motion node and add it to the functional unit:
-    newMotion = fga.FOON.Motion(motionID=None, motionLabel=action_verb)
-    functionalUnit.setMotionNode(newMotion)
-
-    return functionalUnit
-
-def create_olp_functionalUnit(plan_step, plan_objects):
-    functionalUnit = fga.FOON.FunctionalUnit()
-   
-    step_objects = plan_step['Objects']
-    action = plan_step['Action']
-    step_info = plan_step['Step']
-    print("Creating functional unit for:", step_info)
-    print("Objects:", step_objects)
-
-    geometric_states = ['in', 'on', 'under', 'contains']
-
-    for obj in step_objects:
-        #create object node 
-        print("Current object is :", obj)
-
-        #check object state changes in step
-        object_state_changes = plan_step['StateChanges'][obj]
-        print("\t", obj, "state changes:", object_state_changes)
-
-        for state_type in ['Precondition', 'Effect']:
-            # -- create a FOON object node for which we will then add attributes:    
-            new_object = fga.FOON.Object(objectLabel=obj)
-            
-            for state in object_state_changes[state_type]:
-                # -- check if state effect involves another object in step
-                related_obj = None
-
-                parsed_state = state
-
-                for O in plan_objects:
-                    if O in state:
-                        # -- check if there is no object left after removing the related object given by the LLM:
-                        state_sans_obj = parsed_state.replace(O,"").strip()
-                        # -- we remove the name of the related object from the state attribute string:
-                        if state_sans_obj in geometric_states:
-                            related_obj = O
-                            parsed_state = parsed_state.replace(related_obj,"").strip()
-
-                if not related_obj:
-                    # -- this means we have an object not listed initially by the LLM:
-                    #       (usually references to containers or states not foreseen at the time of recipe generation)
-                    for G in geometric_states:
-                        if f'{G} ' in parsed_state:
-                            related_obj = parsed_state.split(f'{G} ')[1]
-                            parsed_state = parsed_state.replace(related_obj,"").strip()
-
-                if "contains" in state:
-                    # -- this means we have a state expressing some kind of containment: 
-                    try:
-                        new_object.addContainedObject(related_obj)
-                    except Exception:
-                        print(state)
-                        print(related_obj)
-                    related_obj = None
-
-                # -- add each state effect to object node:
-                if related_obj:
-                    new_object.addNewState([None, parsed_state, related_obj])
-                else:
-                    new_object.addNewState([None, parsed_state, None])
-
-                print("\t\t", state_type, ":", state, "|| related objects:", related_obj)
-            # -- add the node to the functional unit:
-            functionalUnit.addObjectNode(objectNode=new_object, is_input=(True if state_type == 'Precondition' else False))
-
-    # -- make a new motion node and add it to the functional unit:
-    newMotion = fga.FOON.Motion(motionID=None, motionLabel=action)
-    functionalUnit.setMotionNode(newMotion)
-
-    return functionalUnit
-
-def prompt_LLM(given_prompt, model_name, verbose):
-    if verbose: print(f"Model: {model_name}\nComplete prompt:")
-    if verbose: print(json.dumps(given_prompt,indent=4))
-    # create a completion
-    completion = openai.ChatCompletion.create(
+    # -- create a completion request:
+    completion = openai.chat.completions.create(
         model=model_name,
         messages=given_prompt,
         temperature=0.1,
@@ -145,78 +40,150 @@ def prompt_LLM(given_prompt, model_name, verbose):
         frequency_penalty=0,
         presence_penalty=0
     )
-    if verbose: print("*************************************************************************")
+
+    if verbose:
+        print("*************************************************************************")
+
     response = completion.choices[0].message
-    return(response.role,response.content)
+
+    return (response.role, response.content)
 
 
-def parse_objects(response):
-    unique_objects = []
-    for line in response.lower().split("\n"):
-        if "unique_objects" in line or "unique objects" in line:
-            objects = line.split(":")[1].strip().split(",") 
-            unique_objects = [x.strip().replace(".","") for x in objects]
-    return unique_objects
+def generate_OLP(query_task, incontext_file, llm_model, verbose=True):
+    # -- we will keep track of the entire interaction for context:
+    message = []
+
+    ######################################################################################
+    # NOTE: Stage 1 prompting:
+    ######################################################################################
+
+    def get_stage1_objects(response):
+        # NOTE: this function will parse the output generated from Stage 1 prompting to identify all objects needed for a task:
+
+        # -- we will look for the line in the output indicat
+        unique_objects = []
+        for line in response.lower().split("\n"):
+            if "unique_objects" in line or "unique objects" in line:
+                try:
+                    # -- we use eval() to remove any quotations that indicate some type of string:
+                    unique_objects = eval(line.split(":")[1].strip())
+                except Exception:
+                    # -- if for whatever reason the LLM does not list objects enclosed in quotations,
+                    #       then we just split like normal:
+                    objects = line.split(":")[1].strip().split(",")
+                    unique_objects = [x.strip().replace(".", "")
+                                      for x in objects]
+
+        return unique_objects
+    # enddef
+
+    if verbose:
+        print("*************************************************************************\n"
+              "Stage 1 Prompting\n"
+              "*************************************************************************")
+
+    # NOTE: here is the list of instructions given to the LLM for generating a high-level plan as part of stage 1:
+    system_prompt = "You are a language model that generates concise high-level plans for arbitrary tasks involving object manipulation."\
+        " When generating high-level plans, you must observe the following rules:\n"\
+        " 1. Only focus on what happens to objects.\n"\
+        " 2. Stay consistent with object names."\
+        " 3. Assume all required objects are available on the table. You do not need to retrieve, wash, or clean objects."\
+        " 4. Use one verb per step. The only exception is that you must combine 'pick' and 'place' into a single step using the action 'pick and place'."\
+
+    stage1_user_msg = "After listing the high-level plan, list all the unique objects used or needed in the plan,"\
+        " including the object created after solving the task or objects naturally containing other objects, ignoring state changes to those objects."\
+        " Follow the format: 'unique_objects:[\"object_1\", \"object_2\", \"object_3\", ...]'"
+
+    stage1_prompt = query_task + f"\n{stage1_user_msg}"
+
+    message.extend([{"role": "system", "content": system_prompt},
+                    {"role": "user", "content": stage1_prompt}])
+
+    _, stage1_response = prompt_LLM(message, llm_model, verbose)
+    if verbose:
+        print("\n*************************************************************************")
+        print(f"Stage 1 Response: \n{stage1_response}")
+        print("*************************************************************************\n")
+
+    unique_objects = get_stage1_objects(stage1_response)
+    if verbose:
+        print(f"\nExtracted unique_objects:", unique_objects)
+
+    ######################################################################################
+    # NOTE: Stage 2 prompting:
+    ######################################################################################
+
+    if verbose:
+        print("*************************************************************************\n",
+              "Stage 2 Prompting\n",
+              "*************************************************************************")
+
+    stage2_user_msg = "List all states for each object needed for each high-level plan step,"\
+        " where states refer to preconditions (states before step is executed) and effects (states after step is executed)."\
+        " You must strictly refer to the object names from this set:{}.".format(unique_objects) + \
+        " Do not skip any steps."\
+        " Keep states atomic and list each state separately."\
+        " If an object has ingredients in it, use the word \"contains X\", where \"X\" refers to an ingredient."\
+        " When considering geometric spaces, use the states \"in\", \"on\", and \"under\" (e.g., \"in cup\")"\
+        " You can infer the tools or utensils needed to perform a given action or the container that ingredients can be found in (e.g., \"salt\" may be in a \"shaker\")."\
+        " Also, you should assume all objects are on a table (use the word \"table\" instead of \"surface\" wherever possible).\n\n"\
+        "Most importantly, for the final action, you should mention all the final states of all objects used in the plan in the \"preconditions\" and \"effects\" section."\
+        "\n\nFormat your output as a JSON structure like in the following example:"
+
+    if '.json' in str(incontext_file).lower():
+        # NOTE: we will be selecting a random example from a JSON file containing examples:
+        incontext_examples = json.load(open(incontext_file))
+        selected_example = random.choice(incontext_examples)
+
+        stage2_prompt = f"\n{stage2_user_msg}\n\n{json.dumps(selected_example, indent=4)}"
+    else:
+        # -- use older format of incontext examples:
+        incontext_examples = generate_incontext_examples(
+            incontext_file)  # generate incontext examples
+        stage2_prompt = f"\n{stage2_user_msg}\n{incontext_examples}"
+
+    message.extend([{"role": "assistant", "content": stage1_response},
+                    {"role": "user", "content": stage2_prompt}])
+
+    _, stage2_response = prompt_LLM(message, llm_model, verbose)
+
+    if verbose:
+        print("\n*************************************************************************")
+        print(f"Stage 2 Response: \n{stage2_response}")
+        print("*************************************************************************\n")
+
+    if '.json' in str(incontext_file).lower():
+        # -- use eval() function to parse through the Stage 2 prompt response obtained from LLM:
+        object_level_plan = eval(stage2_response)
+    else:
+        # -- use regex to parse the output obtained from the LLM:
+        object_level_plan = []
+        for olp_unit in stage2_response.split("\n\n"):
+            object_level_plan.append(parse_regex_unit(olp_unit))
+
+    # if verbose:
+    #     print("*************************************************************************\n",
+    #           "Stage 3 Prompting\n",
+    #           "*************************************************************************")
+
+    return {
+        'PlanSketch': stage1_response,
+        'OLP': object_level_plan,
+        'RelevantObjects': unique_objects
+    }
 
 
-def generate_incontext_examples(incontextfile):
-    ret =''
-    lines=[]
-    with open(incontextfile,"r") as f:
+def generate_incontext_examples(incontext_file):
+    ret = ''
+    lines = []
+    with open(incontext_file, "r") as f:
         lines.extend(f.readlines())
     for line in lines:
         ret += line
     return ret
 
 
-def generate_olp(query_task,incontextfile,llm_model="gpt-3.5-turbo", verbose=True):
-    message = []
-    # Stage 1 prompt
-    if verbose: print(f"*************************************************************************\nStage 1 Prompting\n*************************************************************************")
-    system_prompt = "You are an LLM that understands how to generate concise high level plans for arbitrary tasks involving objects and manipulation." \
-        " Only focus on what happens to objects." \
-        " Stay consistent with object names and use one verb per step." \
-        " Assume all objects needed to complete the plan are available: you do not need to retrieve or clean objects."
-    user_prompt1 = "After listing the high level plan, list all the unique objects used in the high level plan, including the object created after solving the task, ignoring state changes to those objects." \
-        " Follow the format 'unique_objects:object_1, object_2, object_3, ...'"
-    query1 = query_task+ f"\n{user_prompt1}"
-    message.extend([{"role":"system", "content":system_prompt},
-                    {"role":"user", "content":query1}])
-
-    stage1_response_role,stage1_response_content = prompt_LLM(message,llm_model,verbose)
-    if verbose: print(f"Stage 1 Response: \n{stage1_response_content}")
-    unique_objects = parse_objects(stage1_response_content)
-    if verbose: print(f"\nExtracted unique_objects:",unique_objects)
-    
-    # Stage 2 prompt
-    if verbose: print(f"*************************************************************************\nStage 2 Prompting\n*************************************************************************")
-    user_prompt2 = f"List all states for each object needed for each step of the generated plan: you must strictly refer to the object names from this set:{unique_objects}."\
-        " Do not skip any steps." \
-        " Do not merge states, keep states atomic, and mention them separately." \
-        " You can infer the type of container that ingredients can be found in (e.g., salt may be found in a shaker)." \
-        " You can also infer tools or utensils needed to perform a given action." \
-        " If an object has ingredients in it, use the word \"contains X\", where \"X\" refers to an ingredient." \
-        "\nFollow this example:"
-    incontext_examples = generate_incontext_examples(incontextfile) #generate incontext examples 
-    # print("In context examples:",incontext_examples)
-    query2 = f"\n{user_prompt2}\n{incontext_examples}"
-    message.extend([{"role":stage1_response_role,"content":stage1_response_content},
-                     {"role":"user", "content":query2}])
-    stage2_response_role,stage2_response_content = prompt_LLM(message,llm_model,verbose)
-
-    if verbose: print(f"Stage 2 Response: \n{stage2_response_content}")
-
-    #extract object list and action to create FOON
-    object_level_plan = []
-    for olp_unit in stage2_response_content.split("\n\n"):
-        object_level_plan.append(parse_olp_unit(olp_unit))
-    
-    return stage1_response_content, object_level_plan, unique_objects
-
-
-
-
-def parse_state_changes(state_changes_str):
+def parse_regex_states(state_changes_str):
     state_changes = {}
     # Splitting at '},', which indicates the end of an entry, followed by a new object name
     entries = re.split(r'\},\s*(?=[\w\s]+:)', state_changes_str.strip())
@@ -236,9 +203,11 @@ def parse_state_changes(state_changes_str):
 
     return state_changes
 
-def parse_olp_unit(olp_unit):
+
+def parse_regex_unit(olp_unit):
     # Regular expression patterns
-    step_pattern = r'Step [0-9]+: (.+)\.'
+    # step_pattern = r'Step [0-9]+: (.+)\.'
+    step_pattern = r'Step [0-9]+: (.+)'
     objects_pattern = r'Objects: \[(.+)\]'
     action_pattern = r'Action: (.+)'
     state_changes_pattern = r'StateChanges:{(.+?)}\s*}$'
@@ -253,21 +222,193 @@ def parse_olp_unit(olp_unit):
     step = step_match.group(1) if step_match else None
     objects = objects_match.group(1).split(', ') if objects_match else []
     action = action_match.group(1) if action_match else None
-    state_changes = parse_state_changes(state_changes_match.group(1)) if state_changes_match else {}
+    state_changes = parse_regex_states(
+        state_changes_match.group(1)) if state_changes_match else {}
+
+    print(step)
+    print(objects)
+    print(action)
+    print(state_changes)
+    print(state_changes_match.group(1))
+    input()
 
     # Constructing the dictionary
     instruction_dict = {
-        'Step': step,
-        'Objects': objects,
+        'Step': eval(step),
+        'Objects': [eval(x) for x in objects],
         'Action': action,
         'StateChanges': state_changes
     }
 
     return instruction_dict
 
-# def parse_plan_steps(plan_steps):
-#     plan_steps = plan_steps.split("\n")
-#     print(
 
-def build_foon():
-    pass
+def create_functionalUnit_ver1(plan_step, plan_objects):
+    functionalUnit = fga.FOON.FunctionalUnit()
+
+    used_objects = plan_step['Objects']
+    action = plan_step['Action']
+    step_info = plan_step['Step']
+    print("Creating functional unit for:", step_info)
+    print("Objects:", used_objects)
+    print(plan_step['StateChanges'].keys())
+
+    geometric_states = ['in', 'on', 'under', 'contains']
+
+    for obj in used_objects:
+        # create object node
+        print("Current object is :", obj)
+
+        try:
+            # check object state changes in step
+            object_state_changes = plan_step['StateChanges'][obj]
+        except KeyError:
+            print(f'Missing object: {obj}')
+            continue
+        else:
+            print("\t", obj, "state changes:", object_state_changes)
+
+        for state_type in ['Precondition', 'Effect']:
+            # -- create a FOON object node for which we will then add attributes:
+            new_object = fga.FOON.Object(objectLabel=obj)
+
+            for state in object_state_changes[state_type]:
+                # -- check if state effect involves another object in step
+                related_obj = None
+
+                parsed_state = state
+
+                for O in plan_objects:
+                    if O in state:
+                        # -- check if there is no object left after removing the related object given by the LLM:
+                        state_sans_obj = parsed_state.replace(O, "").strip()
+                        # -- we remove the name of the related object from the state attribute string:
+                        if state_sans_obj in geometric_states:
+                            related_obj = O
+                            parsed_state = parsed_state.replace(
+                                related_obj, "").strip()
+
+                if not related_obj:
+                    # -- this means we have an object not listed initially by the LLM:
+                    #       (usually references to containers or states not foreseen at the time of recipe generation)
+                    for G in geometric_states:
+                        if f'{G} ' in parsed_state:
+                            related_obj = parsed_state.split(f'{G} ')[1]
+                            parsed_state = parsed_state.replace(
+                                related_obj, "").strip()
+
+                if "contains" in state:
+                    # -- this means we have a state expressing some kind of containment:
+                    try:
+                        new_object.addContainedObject(related_obj)
+                    except Exception:
+                        print(state)
+                        print(related_obj)
+                    related_obj = None
+
+                # -- add each state effect to object node:
+                if related_obj:
+                    new_object.addNewState([None, parsed_state, related_obj])
+                else:
+                    new_object.addNewState([None, parsed_state, None])
+
+                print("\t\t", state_type, ":", state,
+                      "|| related objects:", related_obj)
+            # -- add the node to the functional unit:
+            functionalUnit.addObjectNode(objectNode=new_object, is_input=(
+                True if state_type == 'Precondition' else False))
+
+    # -- make a new motion node and add it to the functional unit:
+    newMotion = fga.FOON.Motion(motionID=None, motionLabel=action)
+    functionalUnit.setMotionNode(newMotion)
+
+    return functionalUnit
+
+
+def create_functionalUnit_ver2(olp, index):
+    # NOTE: version 2 -- strict JSON format
+
+    # -- create a functional unit prototype:
+    functionalUnit = fga.FOON.FunctionalUnit()
+
+    used_objects = olp['Instructions'][index]['RelatedObjects']
+    action = olp['Instructions'][index]['Action']
+    print(f"Creating functional unit for Step {olp['Instructions'][index]['Step']}: {olp['Instructions'][index]['Instruction']}")
+    print("-> related objects:", used_objects)
+
+    geometric_states = ['in', 'on', 'under', 'contains']
+
+    for obj in used_objects:
+
+        if obj in ['table', 'surface']:
+            # -- we will remove any references to the table for object nodes:
+            continue
+
+        # -- create object node:
+        print("Current object is :", obj)
+
+        try:
+            # check object state changes in step
+            object_state_changes = olp['Instructions'][index]['State'][obj]
+        except KeyError:
+            print(f'Missing object: {obj}')
+            continue
+        else:
+            print("\t", obj, "state changes:", object_state_changes)
+
+        for state_type in ['Precondition', 'Effect']:
+            # -- create a FOON object node for which we will then add attributes:
+            new_object = fga.FOON.Object(objectLabel=obj)
+
+            for state in object_state_changes[state_type]:
+                # -- check if state effect involves another object in step
+                related_obj = None
+
+                parsed_state = state
+
+                for O in olp['CompleteObjectSet']:
+                    if O in state:
+                        # -- check if there is no object left after removing the related object given by the LLM:
+                        state_sans_obj = parsed_state.replace(O, "").strip()
+                        # -- we remove the name of the related object from the state attribute string:
+                        if state_sans_obj in geometric_states:
+                            related_obj = O
+                            parsed_state = parsed_state.replace(
+                                related_obj, "").strip()
+
+                if not related_obj:
+                    # -- this means we have an object not listed initially by the LLM:
+                    #       (usually references to containers or states not foreseen at the time of recipe generation)
+                    for G in geometric_states:
+                        if f'{G} ' in parsed_state:
+                            related_obj = parsed_state.split(f'{G} ')[1]
+                            parsed_state = parsed_state.replace(
+                                related_obj, "").strip()
+
+
+                if "contains" in state:
+                    # -- this means we have a state expressing some kind of containment:
+                    try:
+                        new_object.addContainedObject(related_obj)
+                    except Exception:
+                        print(state)
+                        print(related_obj)
+                    related_obj = None
+
+                # -- add each state effect to object node:
+                if related_obj:
+                    new_object.addNewState([None, parsed_state, related_obj])
+                else:
+                    new_object.addNewState([None, parsed_state, None])
+
+                print("\t\t", state_type, ":", state,
+                      "|| related objects:", related_obj)
+            # -- add the node to the functional unit:
+            functionalUnit.addObjectNode(objectNode=new_object, is_input=(
+                True if state_type == 'Precondition' else False))
+
+    # -- make a new motion node and add it to the functional unit:
+    newMotion = fga.FOON.Motion(motionID=None, motionLabel=action)
+    functionalUnit.setMotionNode(newMotion)
+
+    return functionalUnit

@@ -1,96 +1,21 @@
 //
-O0	ice cubes	0
-S0	separate
-O1	glass	0
-S1	empty
-M0	place	<Assumed>
-O0	ice cubes	0
-S2	in	[glass]
-O1	glass	0
-S3	contains	{ice cubes}
+O0	green block	0
+S0	on	[table]
+O2	blue block	0
+S0	on	[table]
+M0	pick and place	<Assumed>
+O0	green block	0
+S0	on	[blue block]
+O2	blue block	0
+S1	under	[green block]
 //
-O2	vodka	0
-S2	in	[bottle]
-O1	glass	0
-S3	contains	{ice cubes}
-M1	pour	<Assumed>
-O2	vodka	0
-S2	in	[glass]
-O1	glass	0
-S3	contains	{ice cubes,vodka}
-//
-O4	tomato juice	0
-S2	in	[bottle]
-O1	glass	0
-S3	contains	{ice cubes,vodka}
-M2	add	<Assumed>
-O4	tomato juice	0
-S2	in	[glass]
-O1	glass	0
-S3	contains	{ice cubes,vodka,tomato juice}
-//
-O5	lemon	0
-S4	whole
-O1	glass	0
-S3	contains	{ice cubes,vodka,tomato juice}
-M3	squeeze	<Assumed>
-O5	lemon	0
-S5	squeezed
-O1	glass	0
-S3	contains	{ice cubes,vodka,tomato juice,lemon}
-//
-O6	worcestershire sauce	0
-S2	in	[bottle]
-O1	glass	0
-S3	contains	{ice cubes,vodka,tomato juice,lemon}
-M2	add	<Assumed>
-O6	worcestershire sauce	0
-S2	in	[glass]
-O1	glass	0
-S3	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce}
-//
-O8	tabasco sauce	0
-S2	in	[bottle]
-O1	glass	0
-S3	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce}
-M2	add	<Assumed>
-O8	tabasco sauce	0
-S2	in	[glass]
-O1	glass	0
-S3	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce,Tabasco sauce}
-//
-O10	salt	0
-S2	in	[shaker]
-O12	pepper	0
-S2	in	[shaker]
-O1	glass	0
-S3	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce,Tabasco sauce}
-M4	sprinkle	<Assumed>
-O10	salt	0
-S2	in	[glass]
-O12	pepper	0
-S2	in	[glass]
-O1	glass	0
-S3	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce,Tabasco sauce,salt,pepper}
-//
-O13	stirrer	0
-S6	clean
-O1	glass	0
-S3	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce,Tabasco sauce,salt,pepper}
-M5	stir	<Assumed>
-O13	stirrer	0
-S7	used
-O1	glass	0
-S3	contains	{mixed cocktail}
-//
-O15	celery stalk	0
-S4	whole
-O1	glass	0
-S3	contains	{mixed cocktail}
-M6	garnish	<Assumed>
-O15	celery stalk	0	!
-S2	in	[glass]
-O1	glass	0	!
-S3	contains	{mixed cocktail}
-S8	garnished with celery stalk
+O3	red block	0
+S0	on	[table]
+O0	green block	0
+S0	on	[blue block]
+M0	pick and place	<Assumed>
+O3	red block	0	!
+S0	on	[green block]
+O0	green block	0	!
+S1	under	[red block]
 //

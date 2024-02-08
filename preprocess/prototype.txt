@@ -1,98 +1,23 @@
 #	FOON Prototype
-#	-- Task Prompt: How do I make a Bloody Mary cocktail?
+#	-- Task Prompt: I have a red block, a green block, and a blue block on a table: how do I stack them such that the colours are in alphabetical order?
 //
-O0	ice cubes	0
-S0	separate
-O0	glass	0
-S0	empty
-M0	Place	<Assumed>
-O0	ice cubes	0
-S0	in	[glass]
-O0	glass	0
-S0	contains	{ice cubes}
+O0	green block	0
+S0	on	[table]
+O0	blue block	0
+S0	on	[table]
+M0	Pick and Place	<Assumed>
+O0	green block	0
+S0	on	[blue block]
+O0	blue block	0
+S0	under	[green block]
 //
-O0	vodka	0
-S0	in	[bottle]
-O0	glass	0
-S0	contains	{ice cubes}
-M0	Pour	<Assumed>
-O0	vodka	0
-S0	in	[glass]
-O0	glass	0
-S0	contains	{ice cubes,vodka}
-//
-O0	tomato juice	0
-S0	in	[bottle]
-O0	glass	0
-S0	contains	{ice cubes,vodka}
-M0	Add	<Assumed>
-O0	tomato juice	0
-S0	in	[glass]
-O0	glass	0
-S0	contains	{ice cubes,vodka,tomato juice}
-//
-O0	lemon	0
-S0	whole
-O0	glass	0
-S0	contains	{ice cubes,vodka,tomato juice}
-M0	Squeeze	<Assumed>
-O0	lemon	0
-S0	squeezed
-O0	glass	0
-S0	contains	{ice cubes,vodka,tomato juice,lemon}
-//
-O0	Worcestershire sauce	0
-S0	in	[bottle]
-O0	glass	0
-S0	contains	{ice cubes,vodka,tomato juice,lemon}
-M0	Add	<Assumed>
-O0	Worcestershire sauce	0
-S0	in	[glass]
-O0	glass	0
-S0	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce}
-//
-O0	Tabasco sauce	0
-S0	in	[bottle]
-O0	glass	0
-S0	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce}
-M0	Add	<Assumed>
-O0	Tabasco sauce	0
-S0	in	[glass]
-O0	glass	0
-S0	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce,Tabasco sauce}
-//
-O0	salt	0
-S0	in	[shaker]
-O0	pepper	0
-S0	in	[shaker]
-O0	glass	0
-S0	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce,Tabasco sauce}
-M0	Sprinkle	<Assumed>
-O0	salt	0
-S0	in	[glass]
-O0	pepper	0
-S0	in	[glass]
-O0	glass	0
-S0	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce,Tabasco sauce,salt,pepper}
-//
-O0	stirrer	0
-S0	clean
-O0	glass	0
-S0	contains	{ice cubes,vodka,tomato juice,lemon,Worcestershire sauce,Tabasco sauce,salt,pepper}
-M0	Stir	<Assumed>
-O0	stirrer	0
-S0	used
-O0	glass	0
-S0	contains	{mixed cocktail}
-//
-O0	celery stalk	0
-S0	whole
-O0	glass	0
-S0	contains	{mixed cocktail}
-M0	Garnish	<Assumed>
-O0	celery stalk	0	!
-S0	in	[glass]
-O0	glass	0	!
-S0	contains	{mixed cocktail}
-S0	garnished with celery stalk
+O0	red block	0
+S0	on	[table]
+O0	green block	0
+S0	on	[blue block]
+M0	Pick and Place	<Assumed>
+O0	red block	0	!
+S0	on	[green block]
+O0	green block	0	!
+S0	under	[red block]
 //

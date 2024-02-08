@@ -41,7 +41,13 @@ path_to_FOON_code = './foon_to_pddl/'
 # NOTE: we need to import some files from the other FOON directory:
 if path_to_FOON_code not in sys.path:
     sys.path.append(path_to_FOON_code)
+
+try:
     import FOON_to_PDDL as ftp
+except ImportError:
+    print(" -- ERROR: Missing 'FOON_to_PDDL.py'!")
+    print("\t-- Download here: https://github.com/davidpaulius/foon_to_pddl/")
+    sys.exit()
 
 # -- define the file name and path to the subgraph file that is going to be converted into PDDL:
 FOON_subgraph_file = None
@@ -66,7 +72,7 @@ path_to_planners = {}
 if os.name == 'nt':
     # -- this is the path to the planners on the Windows side:
     path_to_planners['PDDL4J'] = 'D:/PDDL4J/pddl4j-3.8.3.jar'
-    path_to_planners['fast-downward'] = 'D:/fast-downward-22.06/fast-downward.py'
+    path_to_planners['fast-downward'] = 'D:/fast-downward-23.06/fast-downward.py'
 else:
     # -- this is the path to the planners on the Ubuntu side:
     path_to_planners['fast-downward'] = '/home/david/fast-downward-22.06/fast-downward.py'
