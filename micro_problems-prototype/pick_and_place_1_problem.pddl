@@ -4,24 +4,22 @@
 	; hand/end-effector must be empty (i.e. contains "air"):
 	(in hand air)
 	; making the robot start at a position not close to any objects:
-	(not (at white_box robot))
-	(not (at first_white_toy robot))
-	(not (at second_white_toy robot))
+	(not (at first_pink_toy robot))
+	(not (at pink_box robot))
 	(not (at table robot))
 	(at robot robot)
 
 
 	; precondition predicates obtained directly from macro PO:
-	(in white_box first_white_toy)
-	(on table white_box)
-	(under white_box table)
-	(on table second_white_toy)
-	(under second_white_toy table)
+	(in pink_box air)
+	(on table pink_box)
+	(under first_pink_toy table)
+	(on table first_pink_toy)
+	(under pink_box table)
 
 	; some objects that are on the table for manipulation should be free from collision (i.e. "air" on them):
-	(on white_box air)
-	(on first_white_toy air)
-	(on second_white_toy air)
+	(on first_pink_toy air)
+	(on pink_box air)
 
 	(no-perception)
 )
@@ -31,13 +29,13 @@
 	(in hand air)
 
 	; effect predicates obtained directly from macro PO:
-	(in white_box second_white_toy)
-	(under second_white_toy white_box)
-	(in white_box first_white_toy)
-	(on table white_box)
-	(under white_box table)
-	(not (on table second_white_toy) )
-	(not (under second_white_toy table) )
+	(in pink_box first_pink_toy)
+	(under first_pink_toy pink_box)
+	(on table pink_box)
+	(under pink_box table)
+	(not (in pink_box air) )
+	(not (under first_pink_toy table) )
+	(not (on table first_pink_toy) )
 ))
 
 )

@@ -1,51 +1,48 @@
-//
-O0	first white toy	0
+O2	first pink toy	0
 S0	on	[table]
-O2	white box	0
-S1	empty
-M0	pick and place	<Assumed>
-O0	first white toy	0
-S2	in	[white box]
-O2	white box	0
-S3	contains	{first white toy}
-//
-O3	second white toy	0
+O3	pink box	0
+S2	empty
 S0	on	[table]
-O2	white box	0
-S3	contains	{first white toy}
 M0	pick and place	<Assumed>
-O3	second white toy	0
-S2	in	[white box]
-O2	white box	0
-S3	contains	{first white toy,second white toy}
-//
-O4	first green toy	0
+O2	first pink toy	0
+S3	in	[pink box]
+O3	pink box	0
+S4	contains	{first pink toy}
 S0	on	[table]
-O5	green box	0
-S1	empty
-M0	pick and place	<Assumed>
-O4	first green toy	0	!
-S2	in	[green box]
-O5	green box	0	!
-S3	contains	{first green toy}
 //
-O6	second green toy	0
+O4	second pink toy	0
 S0	on	[table]
-O5	green box	0
-S3	contains	{first green toy}
+O3	pink box	0
+S4	contains	{first pink toy}
+S0	on	[table]
 M0	pick and place	<Assumed>
-O6	second green toy	0
-S2	in	[green box]
-O5	green box	0
-S3	contains	{first green toy,second green toy}
+O4	second pink toy	0
+S3	in	[pink box]
+O3	pink box	0	!
+S4	contains	{first pink toy,second pink toy}
+S0	on	[table]
 //
-O7	third green toy	0
+O5	first green toy	0
 S0	on	[table]
-O5	green box	0
-S3	contains	{first green toy,second green toy}
+O6	green box	0
+S2	empty
+S0	on	[table]
 M0	pick and place	<Assumed>
-O7	third green toy	0	!
-S2	in	[green box]
-O5	green box	0	!
-S3	contains	{first green toy,second green toy,third green toy}
+O5	first green toy	0
+S3	in	[green box]
+O6	green box	0
+S4	contains	{first green toy}
+S0	on	[table]
+//
+O7	second green toy	0
+S0	on	[table]
+O6	green box	0
+S4	contains	{first green toy}
+S0	on	[table]
+M0	pick and place	<Assumed>
+O7	second green toy	0
+S3	in	[green box]
+O6	green box	0	!
+S4	contains	{first green toy,second green toy}
+S0	on	[table]
 //

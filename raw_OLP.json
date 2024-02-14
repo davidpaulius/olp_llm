@@ -1,72 +1,92 @@
 {
-    "Query": "Packing Christmas gifts with same color toys in same color boxes",
+    "Query": "Packing Christmas gifts",
     "CompleteObjectSet": [
-        "first white toy",
-        "second white toy",
-        "white box",
+        "black toy",
+        "first pink toy",
+        "second pink toy",
+        "pink box",
         "first green toy",
         "second green toy",
-        "third green toy",
         "green box"
     ],
     "Instructions": [
         {
             "Step": 1,
-            "Instruction": "Pick and place the first white toy in the white box.",
+            "Instruction": "Pick and place the black toy aside as there is no matching box.",
             "RelatedObjects": [
-                "first white toy",
-                "white box"
+                "black toy"
             ],
             "Action": "Pick and Place",
             "State": {
-                "first white toy": {
+                "black toy": {
                     "Precondition": [
                         "on table"
                     ],
                     "Effect": [
-                        "in white box"
-                    ]
-                },
-                "white box": {
-                    "Precondition": [
-                        "empty"
-                    ],
-                    "Effect": [
-                        "contains first white toy"
+                        "aside"
                     ]
                 }
             }
         },
         {
             "Step": 2,
-            "Instruction": "Pick and place the second white toy in the white box.",
+            "Instruction": "Pick and place the first pink toy in the pink box.",
             "RelatedObjects": [
-                "second white toy",
-                "white box"
+                "first pink toy",
+                "pink box"
             ],
             "Action": "Pick and Place",
             "State": {
-                "second white toy": {
+                "first pink toy": {
                     "Precondition": [
                         "on table"
                     ],
                     "Effect": [
-                        "in white box"
+                        "in pink box"
                     ]
                 },
-                "white box": {
+                "pink box": {
                     "Precondition": [
-                        "contains first white toy"
+                        "empty",
+                        "on table"
                     ],
                     "Effect": [
-                        "contains first white toy",
-                        "contains second white toy"
+                        "contains first pink toy"
                     ]
                 }
             }
         },
         {
             "Step": 3,
+            "Instruction": "Pick and place the second pink toy in the pink box.",
+            "RelatedObjects": [
+                "second pink toy",
+                "pink box"
+            ],
+            "Action": "Pick and Place",
+            "State": {
+                "second pink toy": {
+                    "Precondition": [
+                        "on table"
+                    ],
+                    "Effect": [
+                        "in pink box"
+                    ]
+                },
+                "pink box": {
+                    "Precondition": [
+                        "contains first pink toy",
+                        "on table"
+                    ],
+                    "Effect": [
+                        "contains first pink toy",
+                        "contains second pink toy"
+                    ]
+                }
+            }
+        },
+        {
+            "Step": 4,
             "Instruction": "Pick and place the first green toy in the green box.",
             "RelatedObjects": [
                 "first green toy",
@@ -84,7 +104,8 @@
                 },
                 "green box": {
                     "Precondition": [
-                        "empty"
+                        "empty",
+                        "on table"
                     ],
                     "Effect": [
                         "contains first green toy"
@@ -93,7 +114,7 @@
             }
         },
         {
-            "Step": 4,
+            "Step": 5,
             "Instruction": "Pick and place the second green toy in the green box.",
             "RelatedObjects": [
                 "second green toy",
@@ -111,41 +132,12 @@
                 },
                 "green box": {
                     "Precondition": [
-                        "contains first green toy"
-                    ],
-                    "Effect": [
                         "contains first green toy",
-                        "contains second green toy"
-                    ]
-                }
-            }
-        },
-        {
-            "Step": 5,
-            "Instruction": "Pick and place the third green toy in the green box.",
-            "RelatedObjects": [
-                "third green toy",
-                "green box"
-            ],
-            "Action": "Pick and Place",
-            "State": {
-                "third green toy": {
-                    "Precondition": [
                         "on table"
                     ],
                     "Effect": [
-                        "in green box"
-                    ]
-                },
-                "green box": {
-                    "Precondition": [
                         "contains first green toy",
                         "contains second green toy"
-                    ],
-                    "Effect": [
-                        "contains first green toy",
-                        "contains second green toy",
-                        "contains third green toy"
                     ]
                 }
             }

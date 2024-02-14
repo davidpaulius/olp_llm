@@ -8,13 +8,13 @@
 
 (:constants
 	; objects from provided FOON subgraph:
+	black_toy - object
 	first_green_toy - object
-	first_white_toy - object
+	first_pink_toy - object
 	green_box - object
+	pink_box - object
 	second_green_toy - object
-	second_white_toy - object
-	third_green_toy - object
-	white_box - object
+	second_pink_toy - object
 
 	; objects used in Agostini et al. 2021 - https://arxiv.org/abs/2007.08251
 	air - object
@@ -39,66 +39,82 @@
 )
 
 (:action pick_and_place_0
-	; description: <first_white_toy white_box pick_and_place first_white_toy white_box >
+	; description: <black_toy pick_and_place black_toy >
 	:parameters ( )
 	:precondition (and
-		(in white_box air)
-		(on table white_box)
-		(under first_white_toy table)
-		(under white_box table)
-		(on table first_white_toy)
+		(on table black_toy)
+		(under black_toy table)
 	)
 	:effect (and
 		; new effects of executing this functional unit:
-		(in white_box first_white_toy)
-		(under first_white_toy white_box)
 
 		; preconditions that did not get changed in some way:
-		(on table white_box)
-		(under white_box table)
-
-		; negated preconditions:
-		(not (in white_box air) )
-		(not (under first_white_toy table) )
-		(not (on table first_white_toy) )
+		(on table black_toy)
+		(under black_toy table)
 	)
 )
 
 (:action pick_and_place_1
-	; description: <second_white_toy white_box pick_and_place second_white_toy white_box >
+	; description: <first_pink_toy pink_box pick_and_place first_pink_toy pink_box >
 	:parameters ( )
 	:precondition (and
-		(in white_box first_white_toy)
-		(on table white_box)
-		(under white_box table)
-		(on table second_white_toy)
-		(under second_white_toy table)
+		(in pink_box air)
+		(on table pink_box)
+		(under first_pink_toy table)
+		(on table first_pink_toy)
+		(under pink_box table)
 	)
 	:effect (and
 		; new effects of executing this functional unit:
-		(in white_box second_white_toy)
-		(under second_white_toy white_box)
+		(in pink_box first_pink_toy)
+		(under first_pink_toy pink_box)
 
 		; preconditions that did not get changed in some way:
-		(in white_box first_white_toy)
-		(on table white_box)
-		(under white_box table)
+		(on table pink_box)
+		(under pink_box table)
 
 		; negated preconditions:
-		(not (on table second_white_toy) )
-		(not (under second_white_toy table) )
+		(not (in pink_box air) )
+		(not (under first_pink_toy table) )
+		(not (on table first_pink_toy) )
 	)
 )
 
 (:action pick_and_place_2
+	; description: <second_pink_toy pink_box pick_and_place second_pink_toy pink_box >
+	:parameters ( )
+	:precondition (and
+		(under second_pink_toy table)
+		(on table second_pink_toy)
+		(on table pink_box)
+		(under pink_box table)
+		(in pink_box first_pink_toy)
+	)
+	:effect (and
+		; new effects of executing this functional unit:
+		(in pink_box second_pink_toy)
+		(under second_pink_toy pink_box)
+
+		; preconditions that did not get changed in some way:
+		(on table pink_box)
+		(under pink_box table)
+		(in pink_box first_pink_toy)
+
+		; negated preconditions:
+		(not (under second_pink_toy table) )
+		(not (on table second_pink_toy) )
+	)
+)
+
+(:action pick_and_place_3
 	; description: <first_green_toy green_box pick_and_place first_green_toy green_box >
 	:parameters ( )
 	:precondition (and
-		(under first_green_toy table)
-		(on table first_green_toy)
-		(on table green_box)
-		(under green_box table)
 		(in green_box air)
+		(on table first_green_toy)
+		(under green_box table)
+		(under first_green_toy table)
+		(on table green_box)
 	)
 	:effect (and
 		; new effects of executing this functional unit:
@@ -106,25 +122,25 @@
 		(under first_green_toy green_box)
 
 		; preconditions that did not get changed in some way:
-		(on table green_box)
 		(under green_box table)
+		(on table green_box)
 
 		; negated preconditions:
-		(not (under first_green_toy table) )
-		(not (on table first_green_toy) )
 		(not (in green_box air) )
+		(not (on table first_green_toy) )
+		(not (under first_green_toy table) )
 	)
 )
 
-(:action pick_and_place_3
+(:action pick_and_place_4
 	; description: <second_green_toy green_box pick_and_place second_green_toy green_box >
 	:parameters ( )
 	:precondition (and
 		(in green_box first_green_toy)
-		(on table green_box)
 		(under green_box table)
-		(on table second_green_toy)
 		(under second_green_toy table)
+		(on table second_green_toy)
+		(on table green_box)
 	)
 	:effect (and
 		; new effects of executing this functional unit:
@@ -133,40 +149,12 @@
 
 		; preconditions that did not get changed in some way:
 		(in green_box first_green_toy)
-		(on table green_box)
 		(under green_box table)
+		(on table green_box)
 
 		; negated preconditions:
-		(not (on table second_green_toy) )
 		(not (under second_green_toy table) )
-	)
-)
-
-(:action pick_and_place_4
-	; description: <third_green_toy green_box pick_and_place third_green_toy green_box >
-	:parameters ( )
-	:precondition (and
-		(in green_box second_green_toy)
-		(in green_box first_green_toy)
-		(under third_green_toy table)
-		(on table green_box)
-		(under green_box table)
-		(on table third_green_toy)
-	)
-	:effect (and
-		; new effects of executing this functional unit:
-		(in green_box third_green_toy)
-		(under third_green_toy green_box)
-
-		; preconditions that did not get changed in some way:
-		(in green_box second_green_toy)
-		(in green_box first_green_toy)
-		(on table green_box)
-		(under green_box table)
-
-		; negated preconditions:
-		(not (under third_green_toy table) )
-		(not (on table third_green_toy) )
+		(not (on table second_green_toy) )
 	)
 )
 
