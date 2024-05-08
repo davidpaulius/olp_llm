@@ -1,0 +1,12 @@
+List all states for each object needed for each high-level plan step, where states refer to preconditions and effects. You must adhere to the following rules:
+- You must refer to the following objects wherever applicable: <obj_set>.
+- You may include objects such as tools or containers that is not mentioned in the object set (<obj_set>) (e.g., when chopping, you may need a "knife" and a "cutting board").
+- If an ingredient is used, you must include the containers in which they are naturally found (e.g., "salt" can be in a "shaker", "water" can be in a "bottle").
+- Assume all objects are initially on a table at the start of the task (use the word "table" instead of "surface" wherever possible).
+- List each state separately.
+- If an object retains a precondition, repeat it in its effects (e.g., if an object stays on the table after execution, repeat "on table", else it may be somewhere else like "on cutting board" or "in bowl").
+- For geometric reasoning, use the states "in", "on", and "under" (e.g., "in cup", "on plate", "under bowl").
+- If an object is a container (e.g., "bowl"), list the state "contains X", where "X" is a contained object.
+- If a step has mixing or combining ingredients, repeat all mixed objects in that step.
+- Most importantly, for the final action, repeat final states of all objects used in the plan in the "preconditions" and "effects" section (e.g., a "salad" may have states "contains tomato" and "contains cucumber").
+
