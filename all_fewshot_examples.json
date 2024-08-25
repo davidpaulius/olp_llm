@@ -1,0 +1,782 @@
+{
+    "olp_examples": {
+        "_comment_stage1": "These examples are provided regardless of similarity to task prompt",
+        "stage1": {
+            "blocks": "Example 1:\n\nUser Prompt: Make a tower using only three blocks.\nAvailable objects: [\"4 blocks\"]\n\nHigh-level Plan:\n1. Pick up the first block and place it on the second block.\n2. Pick up the second block and place it on the third block.\n\nExample 2:\n\nUser Prompt: Make a row of four blocks.\nAvailable objects: [\"5 blocks\"]\n\nHigh-level Plan:\n1. Pick up the second block and place it on the left of the first block.\n2. Pick up the third block and place it on the right of the first block.\n3. Pick up the fourth block and place it on the right of the second block.\n\nExample 3:\n\nUser Prompt: Stack blocks such that they spell out \"CAB\" from top to bottom.\nAvailable objects: [\"'A' block\",  \"'B' block\", \"'C' block\", \"'D' block\", \"'E' block\"]\n\nHigh-level Plan:\n1. Pick up the 'A' block and place it on the 'B' block.\n2. Pick up the 'C' block and place it on the 'A' block.",
+            "packing": "Example 1:\n\nUser Prompt: Make a tower using only three blocks.\nAvailable objects: [\"4 blocks\"]\n\nHigh-level Plan:\n1. Pick up the first block and place it on the second block.\n2. Pick up the second block and place it on the third block.\n\nExample 2:\n\nUser Prompt: Pack all boxes such that each box contains exactly 1 item.\nAvailable objects: [\"3 blocks\", \"2 boxes\"]\n\nHigh-level Plan:\n1. Pick up the first block and place it in the first box.\n2. Pick up the second block and place it in the second box.",
+            "cocktails": "Example 1:\n\nUser Prompt: Serve a glass of water with ice.\nAvailable objects: [\"stirrer\", \"cup of ice\", \"bottle of water\", \"bottle of tonic water\", \"drinking glass\"]\n\nHigh-level Plan:\n1. Pour ice from a cup into a drinking glass.\n2. Pour water from a bottle into a drinking glass.\n\nExample 2:\n\nUser Prompt: Make a gin and tonic cocktail.\nAvailable objects: [\"stirrer\", \"bottle of gin\", \"drinking glass\", \"bottle of tonic water\", \"cup of ice\"]\n\nHigh-level Plan:\n1. Pour ice from a cup into a drinking glass.\n2. Pour gin from a bottle into a drinking glass.\n3. Pour tonic water from a bottle into a drinking glass.\n4. Stir the contents (gin, tonic water, and ice) in the drinking glass using a stirrer.\n\nExample 3:\n\nUser Prompt: Make a non-spicy Bloody Mary cocktail.\nAvailable objects: [\"drinking glass\", \"spoon\", \"bottle of vodka\", \"can of tomato juice\", \"cup of lemon juice\", \"cup of tabasco sauce\", \"bottle of Worcestershire sauce\", \"shaker of salt\", \"shaker of black pepper\", \"cup of ice\"]\n\nHigh-level Plan:\n1. Pour ice from a cup into a drinking glass.\n2. Pour vodka from a bottle into a drinking glass.\n3. Pour tomato juice from a can into a drinking glass.\n4. Pour Worcestershire sauce from a bottle into a drinking glass.\n5. Add black pepper into a drinking glass.\n6. Add salt into a drinking glass.\n7. Stir the contents (ice, vodka, tomato juice, Worcestershire sauce, black pepper, and salt) in the drinking glass using a spoon."
+        },
+        "stage2": [
+            {
+                "task_prompt": "How can I slice a tomato?",
+                "all_objects": [
+                    "tomato",
+                    "knife",
+                    "cutting board"
+                ],
+                "all_instructions": [
+                    {
+                        "step": 1,
+                        "instruction": "Pick a tomato and place it on a cutting board.",
+                        "required_objects": [
+                            "tomato",
+                            "cutting board"
+                        ],
+                        "action": "Pick and place",
+                        "object_states": {
+                            "tomato": {
+                                "preconditions": [
+                                    "whole",
+                                    "on work surface"
+                                ],
+                                "effects": [
+                                    "whole",
+                                    "on cutting board"
+                                ]
+                            },
+                            "cutting board": {
+                                "preconditions": [
+                                    "empty",
+                                    "on work surface"
+                                ],
+                                "effects": [
+                                    "under tomato",
+                                    "on work surface"
+                                ]
+                            }
+                        },
+                        "Summary": "A whole tomato is picked and placed on a cutting board."
+                    },
+                    {
+                        "step": 2,
+                        "instruction": "Slice the tomato with a knife.",
+                        "required_objects": [
+                            "tomato",
+                            "knife",
+                            "cutting board"
+                        ],
+                        "action": "Pick and place",
+                        "object_states": {
+                            "tomato": {
+                                "preconditions": [
+                                    "whole",
+                                    "on cutting board"
+                                ],
+                                "effects": [
+                                    "sliced",
+                                    "on cutting board"
+                                ]
+                            },
+                            "knife": {
+                                "preconditions": [
+                                    "clean",
+                                    "on work surface"
+                                ],
+                                "effects": [
+                                    "dirty",
+                                    "on work surface"
+                                ]
+                            },
+                            "cutting board": {
+                                "preconditions": [
+                                    "under tomato",
+                                    "on work surface"
+                                ],
+                                "effects": [
+                                    "under tomato",
+                                    "on work surface"
+                                ]
+                            }
+                        },
+                        "Summary": "A whole tomato that was previously placed on a cutting board is sliced with a knife."
+                    }
+                ]
+            },
+            {
+                "task_prompt": "How can I prepare meatless spaghetti?",
+                "all_objects": [
+                    "pot",
+                    "stove",
+                    "water",
+                    "bottle of water",
+                    "spoon",
+                    "spaghetti",
+                    "box of spaghetti",
+                    "pasta sauce",
+                    "jar of pasta sauce",
+                    "salt",
+                    "salt shaker"
+                ],
+                "all_instructions": [
+                    {
+                        "step": 1,
+                        "instruction": "Pick a pot and place it on a stove.",
+                        "required_objects": [
+                            "pot",
+                            "stove"
+                        ],
+                        "action": "Pick and place",
+                        "object_states": {
+                            "pot": {
+                                "preconditions": [
+                                    "empty",
+                                    "on work surface"
+                                ],
+                                "effects": [
+                                    "empty",
+                                    "on stove"
+                                ]
+                            },
+                            "stove": {
+                                "preconditions": [
+                                    "empty"
+                                ],
+                                "effects": [
+                                    "under pot"
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        "step": 2,
+                        "instruction": "Pour water from a bottle into the pot.",
+                        "required_objects": [
+                            "pot",
+                            "water",
+                            "bottle of water"
+                        ],
+                        "action": "Pour",
+                        "object_states": {
+                            "pot": {
+                                "preconditions": [
+                                    "empty",
+                                    "on stove"
+                                ],
+                                "effects": [
+                                    "contains water",
+                                    "on stove"
+                                ]
+                            },
+                            "water": {
+                                "preconditions": [
+                                    "in bottle"
+                                ],
+                                "effects": [
+                                    "in pot"
+                                ]
+                            },
+                            "bottle of water": {
+                                "preconditions": [
+                                    "contains water",
+                                    "on work surface"
+                                ],
+                                "effects": [
+                                    "contains water",
+                                    "on work surface",
+                                    "less content"
+                                ]
+                            }
+                        },
+                        "Summary": "Water from a bottle is poured into the pot that was previously placed on a stove."
+                    },
+                    {
+                        "step": 3,
+                        "instruction": "Heat pot of water on the stove.",
+                        "required_objects": [
+                            "water",
+                            "pot",
+                            "stove"
+                        ],
+                        "action": "Heat",
+                        "object_states": {
+                            "water": {
+                                "preconditions": [
+                                    "in pot"
+                                ],
+                                "effects": [
+                                    "in pot",
+                                    "boiling"
+                                ]
+                            },
+                            "pot": {
+                                "preconditions": [
+                                    "contains water",
+                                    "on stove"
+                                ],
+                                "effects": [
+                                    "contains water",
+                                    "on stove",
+                                    "heated"
+                                ]
+                            },
+                            "stove": {
+                                "preconditions": [
+                                    "under pot"
+                                ],
+                                "effects": [
+                                    "under pot"
+                                ]
+                            }
+                        },
+                        "Description": "The pot of water becomes heated and the water in the pot is boiling."
+                    },
+                    {
+                        "step": 4,
+                        "instruction": "Add salt from shaker to the pot.",
+                        "required_objects": [
+                            "salt",
+                            "salt shaker",
+                            "pot"
+                        ],
+                        "action": "Sprinkle",
+                        "object_states": {
+                            "salt": {
+                                "preconditions": [
+                                    "in shaker"
+                                ],
+                                "effects": [
+                                    "in pot"
+                                ]
+                            },
+                            "salt shaker": {
+                                "preconditions": [
+                                    "contains salt"
+                                ],
+                                "effects": [
+                                    "contains salt",
+                                    "less content"
+                                ]
+                            },
+                            "pot": {
+                                "preconditions": [
+                                    "contains water",
+                                    "on stove",
+                                    "heated"
+                                ],
+                                "effects": [
+                                    "contains water",
+                                    "on stove",
+                                    "heated",
+                                    "contains salt"
+                                ]
+                            }
+                        },
+                        "Description": "Salt from a salt shaker is added to the pot."
+                    },
+                    {
+                        "step": 5,
+                        "instruction": "Add uncooked spaghetti to the pot.",
+                        "required_objects": [
+                            "spaghetti",
+                            "box of spaghetti",
+                            "pot"
+                        ],
+                        "action": "Pour",
+                        "object_states": {
+                            "spaghetti": {
+                                "preconditions": [
+                                    "in box",
+                                    "uncooked"
+                                ],
+                                "effects": [
+                                    "in pot",
+                                    "uncooked"
+                                ]
+                            },
+                            "box of spaghetti": {
+                                "preconditions": [
+                                    "contains spaghetti"
+                                ],
+                                "effects": [
+                                    "empty"
+                                ]
+                            },
+                            "pot": {
+                                "preconditions": [
+                                    "contains water",
+                                    "on stove",
+                                    "heated",
+                                    "contains salt"
+                                ],
+                                "effects": [
+                                    "contains water",
+                                    "on stove",
+                                    "heated",
+                                    "contains salt",
+                                    "contains spaghetti"
+                                ]
+                            }
+                        },
+                        "Description": "Uncooked spaghetti (usually bought in boxes) is poured into the pot."
+                    },
+                    {
+                        "step": 6,
+                        "instruction": "Cook and stir the spaghetti in the pot.",
+                        "required_objects": [
+                            "pasta",
+                            "spoon",
+                            "pot",
+                            "stove"
+                        ],
+                        "action": "Cook and stir",
+                        "object_states": {
+                            "pasta": {
+                                "preconditions": [
+                                    "in pot",
+                                    "uncooked"
+                                ],
+                                "effects": [
+                                    "in pot",
+                                    "cooked"
+                                ]
+                            },
+                            "spoon": {
+                                "preconditions": [
+                                    "clean",
+                                    "on work surface"
+                                ],
+                                "effects": [
+                                    "dirty",
+                                    "on work surface"
+                                ]
+                            },
+                            "pot": {
+                                "preconditions": [
+                                    "contains water",
+                                    "on stove",
+                                    "heated",
+                                    "contains salt",
+                                    "contains spaghetti"
+                                ],
+                                "effects": [
+                                    "contains water",
+                                    "on stove",
+                                    "heated",
+                                    "contains salt",
+                                    "contains spaghetti"
+                                ]
+                            },
+                            "stove": {
+                                "preconditions": [
+                                    "under pot"
+                                ],
+                                "effects": [
+                                    "under pot"
+                                ]
+                            }
+                        },
+                        "Description": "The spaghetti in the pot is cooked while being stirred with a spoon."
+                    },
+                    {
+                        "step": 7,
+                        "instruction": "Pour pasta sauce in the pot.",
+                        "required_objects": [
+                            "pasta sauce",
+                            "jar of pasta sauce",
+                            "pot"
+                        ],
+                        "action": "Pour",
+                        "object_states": {
+                            "pasta sauce": {
+                                "preconditions": [
+                                    "in jar"
+                                ],
+                                "effects": [
+                                    "in pot"
+                                ]
+                            },
+                            "pot": {
+                                "preconditions": [
+                                    "contains water",
+                                    "on stove",
+                                    "heated",
+                                    "contains salt"
+                                ],
+                                "effects": [
+                                    "contains water",
+                                    "on stove",
+                                    "heated",
+                                    "contains salt",
+                                    "contains pasta"
+                                ]
+                            },
+                            "spoon": {
+                                "preconditions": [
+                                    "clean"
+                                ],
+                                "effects": []
+                            },
+                            "stove": {
+                                "preconditions": [
+                                    "on"
+                                ],
+                                "effects": [
+                                    "off"
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        "step": 7,
+                        "instruction": "Pour pasta sauce in the pot.",
+                        "required_objects": [
+                            "pasta sauce",
+                            "jar",
+                            "pot"
+                        ],
+                        "action": "Pour",
+                        "object_states": {
+                            "pasta sauce": {
+                                "preconditions": [
+                                    "in jar"
+                                ],
+                                "effects": [
+                                    "in pot"
+                                ]
+                            },
+                            "pot": {
+                                "preconditions": [
+                                    "contains water",
+                                    "on stove",
+                                    "heated",
+                                    "contains salt"
+                                ],
+                                "effects": [
+                                    "contains water",
+                                    "on stove",
+                                    "heated",
+                                    "contains salt",
+                                    "contains pasta"
+                                ]
+                            },
+                            "spoon": {
+                                "preconditions": [
+                                    "clean"
+                                ],
+                                "effects": []
+                            },
+                            "stove": {
+                                "preconditions": [
+                                    "on"
+                                ],
+                                "effects": [
+                                    "off"
+                                ]
+                            }
+                        }
+                    }
+                ]
+            },
+            {
+                "task_prompt": "Make a Dark and Stormy cocktail.",
+                "all_objects": [
+                    "drinking glass",
+                    "bottle",
+                    "dark rum",
+                    "can",
+                    "ginger ale",
+                    "cup",
+                    "ice"
+                ],
+                "all_instructions": [
+                    {
+                        "step": 1,
+                        "instruction": "Pour ice into the drinking glass.",
+                        "required_objects": [
+                            "drinking glass",
+                            "ice",
+                            "cup"
+                        ],
+                        "action": "Pour",
+                        "object_states": {
+                            "drinking glass": {
+                                "preconditions": [
+                                    "empty"
+                                ],
+                                "effects": [
+                                    "contains ice"
+                                ]
+                            },
+                            "ice": {
+                                "preconditions": [
+                                    "in cup"
+                                ],
+                                "effects": [
+                                    "in drinking glass"
+                                ]
+                            },
+                            "cup": {
+                                "preconditions": [
+                                    "contains ice"
+                                ],
+                                "effects": [
+                                    "empty"
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        "step": 2,
+                        "instruction": "Pour dark rum into the drinking glass.",
+                        "required_objects": [
+                            "drinking glass",
+                            "dark rum",
+                            "bottle"
+                        ],
+                        "action": "Pour",
+                        "object_states": {
+                            "drinking glass": {
+                                "preconditions": [
+                                    "contains ice"
+                                ],
+                                "effects": [
+                                    "contains ice",
+                                    "contains dark rum"
+                                ]
+                            },
+                            "dark rum": {
+                                "preconditions": [
+                                    "in bottle"
+                                ],
+                                "effects": [
+                                    "in drinking glass"
+                                ]
+                            },
+                            "bottle": {
+                                "preconditions": [
+                                    "contains dark rum"
+                                ],
+                                "effects": [
+                                    "contains dark rum",
+                                    "less content"
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        "step": 3,
+                        "instruction": "Pour ginger ale into the drinking glass.",
+                        "required_objects": [
+                            "drinking glass",
+                            "ginger ale",
+                            "can"
+                        ],
+                        "action": "Pour",
+                        "object_states": {
+                            "drinking glass": {
+                                "preconditions": [
+                                    "contains ice",
+                                    "contains dark rum"
+                                ],
+                                "effects": [
+                                    "contains ice",
+                                    "contains dark rum",
+                                    "contains ginger ale"
+                                ]
+                            },
+                            "ginger ale": {
+                                "preconditions": [
+                                    "in can"
+                                ],
+                                "effects": [
+                                    "in drinking glass"
+                                ]
+                            },
+                            "can": {
+                                "preconditions": [
+                                    "contains ginger ale"
+                                ],
+                                "effects": [
+                                    "contains ginger ale",
+                                    "less content"
+                                ]
+                            }
+                        }
+                    }
+                ]
+            },
+            {
+                "task_prompt": "Make a tower of three blocks.",
+                "all_objects": [
+                    "first block",
+                    "second block",
+                    "third block",
+                    "table"
+                ],
+                "all_instructions": [
+                    {
+                        "step": 1,
+                        "instruction": "Pick up the second block and place it on the first block.",
+                        "required_objects": [
+                            "first block",
+                            "second block"
+                        ],
+                        "action": "Pick and place",
+                        "object_states": {
+                            "first block": {
+                                "preconditions": [
+                                    "on table",
+                                    "under nothing"
+                                ],
+                                "effects": [
+                                    "on table",
+                                    "under second block"
+                                ]
+                            },
+                            "second block": {
+                                "preconditions": [
+                                    "on table"
+                                ],
+                                "effects": [
+                                    "on first block",
+                                    "under nothing"
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        "step": 2,
+                        "instruction": "Pick up the third block and place it on the second block.",
+                        "required_objects": [
+                            "second block",
+                            "third block"
+                        ],
+                        "action": "Pick and place",
+                        "object_states": {
+                            "second block": {
+                                "preconditions": [
+                                    "on first block",
+                                    "under nothing"
+                                ],
+                                "effects": [
+                                    "on first block",
+                                    "under third block"
+                                ]
+                            },
+                            "third block": {
+                                "preconditions": [
+                                    "on table"
+                                ],
+                                "effects": [
+                                    "on second block",
+                                    "under nothing"
+                                ]
+                            }
+                        }
+                    }
+                ],
+                "final_state": {
+                    "first block": {
+                        "on": "table",
+                        "under": "second block"
+                    },
+                    "second block": {
+                        "on": "first block",
+                        "under": "third block"
+                    },
+                    "third block": {
+                        "on": "second block",
+                        "under": "nothing"
+                    }
+                }
+            },
+            {
+                "task_prompt": "Stack blocks such that they spell out \"CAB\" from top to bottom.",
+                "all_objects": [
+                    "'A' block",
+                    "'B' block",
+                    "'C' block",
+                    "table"
+                ],
+                "all_instructions": [
+                    {
+                        "step": 1,
+                        "instruction": "Pick up the 'A' block and place it on the 'B' block.",
+                        "required_objects": [
+                            "'A' block",
+                            "'B' block"
+                        ],
+                        "action": "Pick and place",
+                        "object_states": {
+                            "'A' block": {
+                                "preconditions": [
+                                    "on table"
+                                ],
+                                "effects": [
+                                    "on 'B' block",
+                                    "under nothing"
+                                ]
+                            },
+                            "'B' block": {
+                                "preconditions": [
+                                    "on table",
+                                    "under nothing"
+                                ],
+                                "effects": [
+                                    "on table",
+                                    "under 'A' block"
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        "step": 2,
+                        "instruction": "Pick up the 'C' block and place it on the 'A' block.",
+                        "required_objects": [
+                            "'A' block",
+                            "'C' block"
+                        ],
+                        "action": "Pick and place",
+                        "object_states": {
+                            "'A' block": {
+                                "preconditions": [
+                                    "on 'B' block",
+                                    "under nothing"
+                                ],
+                                "effects": [
+                                    "on 'B' block",
+                                    "under 'C' block"
+                                ]
+                            },
+                            "'C' block": {
+                                "preconditions": [
+                                    "on table"
+                                ],
+                                "effects": [
+                                    "on 'A' block",
+                                    "under nothing"
+                                ]
+                            }
+                        }
+                    }
+                ],
+                "final_state": {
+                    "'A' block": {
+                        "on": "'B' block",
+                        "under": "'C' block"
+                    },
+                    "'B' block": {
+                        "on": "table",
+                        "under": "'A' block"
+                    },
+                    "'C' block": {
+                        "on": "'A' block",
+                        "under": "nothing"
+                    }
+                }
+            }
+        ]
+    },
+    "llm+p_examples": {
+        "blocks": [
+            {
+                "task_prompt": "Make a tower using only three blocks.",
+                "pddl": "These objects are on the table: [\"red_block_1\", \"red_block_2\", \"blue_block_1\", \"green_block_1\"]. The current state of the world is:\n- The robot's hand is empty (\"air\" is in the \"hand\").\n- red_block_1 is on table.\n- table is under red_block_1.\n- red_block_2 is on table.\n- table is under red_block_2.\n- blue_block_1 is on table.\n- table is under blue_block_1.\n- green_block_1 is on table.\n- table is under green_block_1.\n- There is nothing on red_block_1 (\"air\" is on \"red_block_1\").\n- There is nothing on red_block_2 (\"air\" is on \"red_block_2\").\n- There is nothing on blue_block_1 (\"air\" is on \"blue_block_1\").\n- There is nothing on green_block_1 (\"air\" is on \"green_block_1\").\n\nYour goal is to make a tower of three blocks. This means that:\n- The robot's hand should be empty after execution (\"air\" is in the \"hand\").\n- red_block_1 is on table.\n- table is under red_block_1.\n- blue_block_1 is on red_block_1.\n- blue_block_1 is under green_block_1.\n- green_block_1 is on blue_block_1.\n- There is nothing on green_block_1 (\"air\" is on \"green_block_1\").\n\nThe problem PDDL file equivalent to this task is:\n\n(define (problem spelling-tower-CAB)\n\t(:domain blocks)\n\t(:init\n\t\t(in hand air) ; nothing is in hand\n\t\t(on table red_block_1) ; red_block_1 is on table\n\t\t(under red_block_1 table) ; table is under red_block_1\n\t\t(on table red_block_2) ; red_block_2 is on table\n\t\t(under red_block_2 table) ; table is under red_block_2\n\t\t(on table blue_block_1) ; blue_block_1 is on table\n\t\t(under blue_block_1 table) ; table is under blue_block_1\n\t\t(on table green_block_1) ; green_block_1 is on table\n\t\t(under green_block_1 table) ; table is under green_block_1\n\t\t(on red_block_1 air) ; nothing is on red_block_1\n\t\t(on red_block_2 air) ; nothing is on red_block_2\n\t\t(on blue_block_1 air) ; nothing is on blue_block_1\n\t\t(on green_block_1 air) ; nothing is on green_block_1\n\t)\n\t(:goal (and\n\t\t(in hand air) ; nothing is in hand\n\t\t(on table red_block_1) ; red_block_1 is on table\n\t\t(under red_block_1 table) ; table is under red_block_1\n\t\t(on red_block_1 blue_block_1) ; blue_block_1 is on red_block_1\n\t\t(under blue_block_1 red_block_1) ; red_block_1 is under blue_block_1\n\t\t(on blue_block_1 green_block_1) ; green_block_1 is on blue_block_1\n\t\t(under green_block_1 blue_block_1) ; blue_block_1 is under green_block_1\n\t\t(on green_block_1 air) ; nothing is on green_block_1\n\t))\n)"
+            },
+            {
+                "task_prompt": "Stack blocks such that they spell out \"CAB\" from top to bottom.",
+                "pddl": "These objects are on the table: [\"A_block_1\", \"B_block_1\", \"C_block_1\", \"D_block_1\"]. The current state of the world is:\n- The robot's hand is empty (\"air\" is in the \"hand\").\n- A_block_1 is on table.\n- table is under A_block_1.\n- B_block_1 is on A_block_1.\n- A_block_1 is under B_block_1.\n- C_block_1 is on table.\n- table is under C_block_1.\n- D_block_1 is on C_block_1.\n- C_block_1 is under D_block_1.\n- There is nothing on B_block_1 (\"air\" is on \"B_block_1\").\n- There is nothing on D_block_1 (\"air\" is on \"D_block_1\").\n\nYour goal is to stack the blocks into a tower such that it spells \"CAB\" from top to bottom. This means that:\n- The robot's hand should be empty after execution (\"air\" is in the \"hand\").\n- A_block_1 is on B_block_1.\n- B_block_1 is under A_block_1.\n- B_block_1 is on table.\n- table is under B_block_1.\n- C_block_1 is on A_block_1.\n- A_block_1 is under C_block_1.\n- There is nothing on C_block_1 (\"air\" is on \"C_block_1\").\n\nThe problem PDDL file equivalent to this task is:\n\n(define (problem 3-block-tower)\n\t(:domain blocks)\n\t(:init\n\t\t(in hand air) ; nothing is in hand\n\t\t(on table A_block_1) ; A_block_1 is on table\n\t\t(under A_block_1 table) ; table is under A_block_1\n\t\t(on table C_block_1) ; C_block_1 is on table\n\t\t(under C_block_1 table) ; table is under C_block_1\n\t\t(on A_block_1 B_block_1) ; B_block_1 is on A_block_1\n\t\t(under B_block_1 A_block_1) ; A_block_1 is under B_block_1\n\t\t(on C_block_1 D_block_1) ; D_block_1 is on C_block_1\n\t\t(under D_block_1 C_block_1); C_block_1 is under D_block_1\n\t\t(on B_block_1 air) ; nothing is on B_block_1\n\t\t(on D_block_1 air) ; nothing is on D_block_1\n\t)\n\t(:goal (and\n\t\t(in hand air) ; nothing is in hand\n\t\t(on table B_block_1) ; B_block_1 is on table\n\t\t(under B_block_1 table); table is under B_block_1\n\t\t(on B_block_1 A_block_1) ; A_block_1 is on B_block_1\n\t\t(under A_block_1 B_block_1) ; B_block_1 is under A_block_1\n\t\t(on A_block_1 C_block_1) ; C_block_1 is on A_block_1\n\t\t(under C_block_1 A_block_1) ; A_block_1 is under C_block_1\n\t\t(on C_block_1 air) ; nothing is on C_block_1\n\t))\n)"
+            }
+        ]
+    }
+}

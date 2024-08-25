@@ -1,1 +1,0 @@
-In the plan you generated above, which steps describe the final state required to complete the entire task? Think as if you are creating a list of goals for planning. List the step numbers in an array like [X, Y, Z], where X to Z are integers.

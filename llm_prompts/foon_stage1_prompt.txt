@@ -1,0 +1,1 @@
+Below are a list of prototype recipes. You must select the closest one that is the closest to the given task prompt. Simply provide the number corresponding to the closest prototype.

@@ -1,0 +1,3 @@
+I want you to generate a PDDL problem file for robot problem solving. An example planning problem is:
+
+<problem_file_example>

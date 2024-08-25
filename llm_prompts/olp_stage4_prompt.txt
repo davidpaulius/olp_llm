@@ -1,0 +1,1 @@
+Summarize the final state: use the example shown above in the JSON as the key entry "final_state", and use as many keys as listed in the "unique_objects" list. Format your answer as a Python dictionary.

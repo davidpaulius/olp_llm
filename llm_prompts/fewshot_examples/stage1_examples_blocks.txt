@@ -1,0 +1,35 @@
+#######
+
+Example 1:
+
+User Prompt: Make a tower using only three blocks.
+Available objects: ["4 blocks"]
+
+High-level Plan:
+1. Pick up the first block and place it on top of the second block.
+2. Pick up the second block and place it on top of the third block.
+
+#######
+
+Example 2:
+
+User Prompt: Make a row of four blocks.
+Available objects: ["5 blocks"]
+
+High-level Plan:
+1. Pick up the second block and place it on the left of the first block.
+2. Pick up the third block and place it on the right of the first block.
+3. Pick up the fourth block and place it on the right of the second block.
+
+#######
+
+Example 3:
+
+User Prompt: Stack blocks such that they spell out "CAB" from top to bottom.
+Available objects: ["'A' block",  "'B' block", "'C' block", "'D' block", "'E' block"]
+
+High-level Plan:
+1. Pick up the 'A' block and place it on top of the 'B' block.
+2. Pick up the 'C' block and place it on top of the 'A' block.
+
+#######

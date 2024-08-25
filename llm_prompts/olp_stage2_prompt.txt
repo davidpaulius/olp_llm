@@ -1,0 +1,11 @@
+List all the states of each object used in each plan step, where states refer to preconditions and effects. You must adhere to the following rules:
+- You must refer to the available objects wherever applicable: <obj_set>.
+- You can include any objects missing from the above object list that are needed to complete a step. For example, for chopping, you may need a "knife" and a "cutting board".
+- If there are multiple instances of an object, use ordinal numbers for the object names (e.g., if there are 2 bowls used in the plan, use "first bowl" and "second bowl" to refer to each instance).
+- If an ingredient is used, you must include the containers in which it is commonly found. For example, "salt" is commonly found in a "shaker", so add "salt" and "shaker" as separate objects.
+- List every single state (do not use ellipses for conciseness).
+- If an object keeps a precondition state after a step, repeat the state in its effects.
+- Use the states "in", "on", and "under" for geometric relations  (e.g., "in cup" or "under bowl").
+- If an object has nothing on top of it, use the state "under nothing".
+- If an object is a container and it has nothing in it, use the state "empty".
+- If an object is a container, use the state "contains X", where "X" is a contained object. For example, if a bowl contains water and salt, it has states "contains water" and "contains salt".

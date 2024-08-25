@@ -1,39 +1,34 @@
-#python
-
-'''luaExec
--- Here we have a special Lua section:
-function sysCall_info()
-    return {menu = 'OMPLement'}
-end
-'''
-
 def sysCall_init():
-    print("[OMPLement]: Initializing motion planning script with OMPL...")
     sim = require('sim')
     simIK = require('simIK')
     simOMPL = require('simOMPL')
+    math = require('math')
+
+    sim.addLog(sim.getInt32Param(sim.intparam_verbosity), "[OMPLement] : Loading OMPL motion planning script...")
+
 
 def sysCall_addOnScriptSuspend():
     pass
 
+
 def sysCall_cleanup():
-    print("[OMPLement]: Cleaning up script...")
+    sim.addLog(sim.getInt32Param(sim.intparam_verbosity), "[OMPLement] : Unloading OMPL motion planning script...")
 
 
-def getConfig(joint_handles):
-    config = [-1] * len(joint_handles)
-    for J in range(len(joint_handles)):
-        config[J] = sim.getJointPosition(joint_handles[J])
+def getConfig():
+    config = [-1] * len(self.joint_handles)
+    for J in range(len(self.joint_handles)):
+        config[J] = sim.getJointPosition(self.joint_handles[J])
 
     return config
 
 
-def setConfig(joint_handles, config):
-    for J in range(len(joint_handles)):
-        sim.setJointPosition(joint_handles[J], config[J])
+def setConfig(config):
+    for J in range(len(self.joint_handles)):
+        sim.setJointPosition(self.joint_handles[J], config[J])
 
 
-def configurationValidationCallback(robotCollection, config):
+def configurationValidationCallback(config):
     # -- check if a configuration is valid, i.e. doesn't collide
     # -- save current config:
     tmp = getConfig()
@@ -42,83 +37,177 @@ def configurationValidationCallback(robotCollection, config):
     setConfig(config)
 
     # -- does new config collide?
-    is_collision = sim.checkCollision(robotCollection,sim.handle_all)
-    print('a', is_collision)
+    objs_in_collision = []
+    is_collision, handles = sim.checkCollision(self.robotCollection,sim.handle_all)
+    if is_collision == 1 and handles[1] not in objs_in_collision:
+        objs_in_collision.append(sim.getObjectName(handles[1]))
+
     # -- restore original config:
     setConfig(tmp)
+
+    if bool(objs_in_collision):
+        sim.addLog(sim.getInt32Param(sim.intparam_verbosity), "collision found with:", objs_in_collision)
 
     return not bool(is_collision)
 
 
-def path_planning(target_object, gripper_action=-1, robot_name='Panda'):
+def path_planning(args):
+    """
+    This function requires a dictionary containing the following fields:
+        1. "robot" :- the name of the robot's base in the scenario
+        2. "goal" :- the object handle for a target (this should be some kind of dummy object -- refer to Python code for example)
+        3. "algorithm" :- the name of the motion planning algorithm to use (by default, "RRTstar" will be used)
+        4. "num_attempts" :- the number of times to run OMPL (default: 20)
+        5. "max_compute" :- the maximum time (in seconds) allotted to computing a solution
+        6. "max_simplify" :- the maximum time (in seconds) allotted to simplifying a solution
+    """
+
+    # -- first check if the robot name and goal handle have been provided to the function:
+    assert "robot" in args, "[OMPLement] : Robot name not defined!"
+    robot_name = args["robot"]
 
     robot = sim.getObject(f'/{robot_name}')
-    gripper = sim.getObject(f'/{robot_name}_target')
-    tip = sim.getObject(f'/{robot_name}_tip')
 
-    # NOTE: the Panda arm has 7 joints:
-    joint_handles = [-1] * (7 if robot_name == 'Panda' else 6)
-    joint_projections = [0] * len(joint_handles)
-    for J in range(len(joint_handles)):
-        joint_handles[J] = sim.getObject(f'/{robot_name}_joint{J+1}')
-        joint_projections[J] += (1 if J < 3 else 0)
+    # NOTE: we will create a dummy object representing the target for planning!
+    # -- extract the goal object given as input to this function:
+    assert "goal" in args, "[OMPLement] : Goal not defined!"
+    goal = args["goal"]
 
+    pose = sim.getObjectPose(goal, robot)
 
-    goal_handle = sim.getObject(f'/{target_object}')
+    algorithm = simOMPL.Algorithm.RRTstar
+    if "algorithm" in args: algorithm = args["algorithm"]
+
+    max_compute = 5
+    if "max_compute" in args: max_compute = args["max_compute"]
+
+    max_simplify = -1
+    if "max_simplify" in args: max_simplify = args["max_simplify"]
+
+    # -- arm_prefix :- you can define the name format for joints (in the case where maybe there is a particular
+    #   set of joints for which you want to do motion planning -- e.g., Spot robot has arm joints separate to legs)
+    if "arm_prefix" in args:
+        joint_prefix = f"/{args['arm_prefix']}_joint"
+        tip = sim.getObject(f"/{args['arm_prefix']}_tip")
+    else:
+        joint_prefix = f"/{robot_name}_joint"
+        tip = sim.getObject(f'/{robot_name}/tip')
+
+    # -- num_ompl_attempts :- we have this functionality because simOMPL.compute() can reuse previously computed data
+    #   Source: https://manual.coppeliarobotics.com/en/pathAndMotionPlanningModules.htm
+    num_ompl_attempts = 20
+    # -- check if the number of attempts for OMPL to solve a problem has been defined:
+    if "num_attempts" in args: num_ompl_attempts = args["num_attempts"]
+
+    assert robot != -1, "[OMPLement] : Robot base not defined!"
+    assert tip != -1, "[OMPLement] : End-effector tip not defined!"
+
+    ################################################################################################
+
+    # NOTE: you need to know how many joints the robot you're using has;
+    #   ideally, these joints should have some naming convention like in the loop below:
+    self.joint_handles = []
+
+    num_joints = 1
+    while True:
+        # -- using "noError" so default handle is -1 (if not found);
+        #    read more here: https://manual.coppeliarobotics.com/en/regularApi/simGetObject.htm
+        obj_handle = sim.getObject(f'{joint_prefix}{num_joints}', {"noError": True})
+
+        if obj_handle == -1: break
+
+        self.joint_handles.append(obj_handle)
+        num_joints += 1
+
+    # -- we will only use the first three joints (3) for projections:
+    self.joint_projections = list([1] * 3) + list([0] * (len(self.joint_handles)-3))
+
+    sim.addLog(sim.getInt32Param(sim.intparam_verbosity), f'[OMPLement] : Number of joints for robot "{robot_name}" - {len(self.joint_handles)}')
 
     # -- Prepare robot collection:
-    robotCollection = sim.createCollection()
-    sim.addItemToCollection(robotCollection, sim.handle_tree, robot, 0)
+    self.robotCollection = sim.createCollection()
+    sim.addItemToCollection(self.robotCollection, sim.handle_tree, robot, 0)
 
     # -- prepare an ik task (in order to be able to find configs that match specific end-effector poses):
     ikEnv = simIK.createEnvironment()
     ikGroup = simIK.createGroup(ikEnv)
-    _, simToIkObjectMapping, _ = simIK.addElementFromScene(ikEnv,ikGroup,robot,tip,gripper,simIK.constraint_pose)
+    ikElement, simToIkObjectMapping, _ = simIK.addElementFromScene(ikEnv,ikGroup,robot,tip,goal,simIK.constraint_pose)
+    simIK.syncFromSim(ikEnv, [ikGroup])
+
     # -- get a few handles from the IK world:
     ikJointHandles = []
-    for J in range(len(joint_handles)):
-        ikJointHandles.append(simToIkObjectMapping[joint_handles[J]])
-    print(ikJointHandles)
+    for J in range(len(self.joint_handles)):
+        ikJointHandles.append(simToIkObjectMapping[self.joint_handles[J]])
 
-    iktarget_object=simToIkObjectMapping[gripper]
+    ikGoal=simToIkObjectMapping[goal]
     ikBase=simToIkObjectMapping[robot]
+    ikTip=simToIkObjectMapping[tip]
 
-    # -- Find a collision-free config that matches a specific pose:
-    pose = sim.getObjectPose(goal_handle, robot)
-    simIK.setObjectPose(ikEnv,iktarget_object,ikBase,pose)
+    #path=simIK.generatePath(ikEnv,ikGroup,ikJointHandles,ikTip,500)
+    simIK.setObjectPose(ikEnv,ikGoal,ikBase,pose)
 
-    config = simIK.findConfig(ikEnv,ikGroup,ikJointHandles,0.5,0.5,[1,1,1,0.1],configurationValidationCallback)
-    print(config)
-    if config:
-        # -- found a collision-free config that matches the desired pose!
+    # -- check here for more info on how a valid configuration is found via IK: https://manual.coppeliarobotics.com/en/simIK.htm#simIK.findConfigs
+    configs = simIK.findConfigs(
+        ikEnv,ikGroup,ikJointHandles,
+        {
+            'maxDist': 0.05,
+            'maxTime': 10,
+            'findMultiple': False, # -- change to True to find multiple solutions
+            'pMetric': [0.05,0.05,0.05,0.1],
+            'cb': configurationValidationCallback
+        })
+
+    final_path = None
+
+    if len(configs) > 0:
+        # -- found a robot config that matches the desired pose!
+        sim.addLog(sim.getInt32Param(sim.intparam_verbosity), "[OMPLement] : valid configuration found!")
+
         # -- Now find a collision-free path (via path planning) that brings us from current config to the found config:
         ompl_task = simOMPL.createTask('task')
-        simOMPL.setAlgorithm(ompl_task, simOMPL.Algorithm.RRTConnect)
-        simOMPL.setStateSpaceForJoints(ompl_task, joint_handles, joint_projections)
-        simOMPL.setCollisionPairs(ompl_task,[robotCollection, robotCollection])
+        simOMPL.setAlgorithm(ompl_task, algorithm)
+        simOMPL.setStateSpaceForJoints(ompl_task, self.joint_handles, self.joint_projections)
+        simOMPL.setCollisionPairs(ompl_task,[self.robotCollection, sim.handle_all])
         simOMPL.setStartState(ompl_task,getConfig())
-        simOMPL.setGoalState(ompl_task,config)
-        # -- now we could add more goal states with simOMPL.addGoalState, to increase the chance to find a collision-free path. But we won't do it for simplicity's sake
+        simOMPL.setGoalState(ompl_task,configs[0])
+        simOMPL.setStateValidityCheckingResolution(ompl_task, 0.001)
+        simOMPL.setVerboseLevel(ompl_task, 1)
         simOMPL.setup(ompl_task)
-        result,path = simOMPL.compute(ompl_task,4,-1,300)
-        if result and path:
-            # -- We found a collision-free path
-            # -- Now move along the path in a very simple way:
-            for i in range(simOMPL.getPathStateCount(ompl_task,path)):
-                conf=simOMPL.getPathState(ompl_task,path,i)
-                setConfig(conf)
-                simOMPL.drawPath(ompl_task, path, 1, [255, 255, 255], )
+
+        for _ in range(num_ompl_attempts):
+            # -- read more about compute operation here: https://manual.coppeliarobotics.com/en/simOMPL.htm#compute
+            result, path = simOMPL.compute(ompl_task,max_compute,max_simplify,0)
+
+            # -- we will see if there was an exact solution found;
+            #    that way we know if we might need to loop back around again to find the solution
+            is_exact_solution = simOMPL.hasExactSolution(ompl_task)
+            sim.addLog(sim.getInt32Param(sim.intparam_verbosity), f"[OMPLement] : Exact solution? - {is_exact_solution}")
+
+            # -- if no exact solution was found... then maybe we will compute again?
+
+            if result and is_exact_solution:
+                # -- We found a collision-free path!
+                sim.addLog(sim.getInt32Param(sim.intparam_verbosity), f"[OMPLement] : Length of path: {int(simOMPL.getPathStateCount(ompl_task,path))}")
+
+                # NOTE: the path contains a Mx1 vector, which needs to be transformed to NxJ vector, where N = M/J.
+                # -- the final path will be stored as a NxJ matrix, where N = number of points in trajectory and J = number of joints.
+                final_path = []
+
+                for x in range(0, len(path), len(self.joint_handles)):
+                    final_path.append(path[x:x+len(self.joint_handles)])
+
+                # NOTE: old way of parsing through the path -- it is very slow
+                #for i in range(int(simOMPL.getPathStateCount(ompl_task,path))):
+                #    conf=simOMPL.getPathState(ompl_task,path,i+1)
+                #    final_path.append(conf)
+
+                assert simOMPL.getPathStateCount(ompl_task,path) == len(final_path), "[OMPLement] : error in path rebuild?"
+
+                break
 
         simOMPL.destroyTask(ompl_task)
 
-    # -- use the gripper actions to decide whether to open or close gripper (-1 and 1 respectively, otherwise 0 -- no change):
-    if gripper_action > -1:
-        if gripper_action == 1:
-            print('close')
-            sim.setInt32Signal('close_gripper', 0)
-        else:
-            print('open')
-            sim.setInt32Signal('close_gripper', 1)
-    #endif
+    else:
+        sim.addLog(sim.getInt32Param(sim.intparam_verbosity), "[OMPLement] : no configuration found!")
 
-
+    return final_path
