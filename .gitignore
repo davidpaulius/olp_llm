@@ -5,6 +5,9 @@ FOON-object_index.txt
 FOON-state_index.txt
 FOON-input_only_nodes.txt
 
+results-*/
+raw_OLP.json
+
 *.code-workspace
 micro_problems-*/
 postprocess/
