@@ -7,6 +7,7 @@ FOON-input_only_nodes.txt
 
 results-*/
 raw_OLP.json
+raw_FOON.json
 
 *.code-workspace
 micro_problems-*/
