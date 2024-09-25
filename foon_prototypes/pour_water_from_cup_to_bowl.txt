@@ -1,0 +1,16 @@
+# FOON Prototype: "Prepare a simple meal"
+//
+O0	cup	1
+S1	contains	{water}
+O1	bowl	0
+S2	empty
+O3	water	1
+S3	in	[cup]
+M0	pour	<Assumed>
+O0	cup	1
+S2	empty
+O1	bowl	0
+S1	contains	{water}
+O3	water	1
+S3	in	[bowl]
+//

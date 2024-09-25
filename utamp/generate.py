@@ -10,54 +10,49 @@ client = None
 textures_dir = '/textures/'
 
 def randomize_blocks(
+        sim_interfacer: type[Interfacer],
         path: str,
         attributes: dict = {
             'colours': {
-                'red': [255, 0, 0],
-                'green': [0, 255, 0],
-                'blue': [0, 0, 255],
+                'red': {'rgb': [255, 0, 0], 'count': 0},
+                'blue': {'rgb': [0, 255, 0], 'count': 0},
+                'green': {'rgb': [0, 0, 255], 'count': 0},
             },
             'alphabets': {
-                x: os.path.join(textures_dir, f'{x.lower()}.png') for x in ['A', 'B', 'C',]
+                x: {'texture': os.path.join(textures_dir, f'{x.lower()}.png'), 'count': 0} for x in ['A', 'B', 'C',]
             }
         },
-        block_type: int = 0, # NOTE: 0 -- coloured blocks, 1 -- alphabet blocks
-        add_tiles: bool = False,
+        max_instances: int = 5,
+        block_type: str = 'colours', # NOTE: 0 -- coloured blocks, 1 -- alphabet blocks
         all_shapes: bool = False,
         rotate: bool = False,
+        suffix: str = None,
         num_empty_spots: int = 2,
-        max_instances: int = None,
     ) -> tuple[str, dict]:
 
     # NOTE: if 'all_shapes' is set to True, we will use all the dimensions listed below:
-    block_sizes = {'1x1': [0.05, 0.05, 0.05],
-                   '3x1': [0.15, 0.05, 0.05], }
+    block_sizes = {'1x1': [0.055, 0.055, 0.055],
+                   '3x1': [0.15, 0.055, 0.055], }
 
-    tally = None
-    # -- randomize the scene with a certain number of blocks
-    if bool(block_type):
-        tally = {'block': {L: 0 for L in attributes['alphabets']}}
-    else:
-        tally = {'block': {C: 0 for C in attributes['colours']}}
+    tally = {'block': {L: 0 for L in attributes[block_type]}}
 
     all_objects = []
 
-    sim_interfacer = Interfacer(scene_file_name=path)
-
-    if bool(block_type):
+    if block_type == 'alphabets':
         texture_objs = {}
         for L in attributes['alphabets']:
-            handle, texture_id, _ = sim_interfacer.sim.createTexture(attributes['alphabets'][L], 13)
+            handle, texture_id, _ = sim_interfacer.sim.createTexture(attributes['alphabets'][L]['texture'], 13)
             texture_objs[L] = (handle, texture_id)
 
     # -- first, let's deal with generating blocks:
     for atr in tally['block']:
 
-        # -- randomly decide on number of blocks to place:
-        if not bool(block_type):
-            tally['block'][atr] = randint(1, (max_instances if max_instances else 4))
+        if 'count' not in attributes[block_type][atr] or not bool(attributes[block_type][atr]['count']):
+            # -- randomly decide on number of blocks to place if object attribute count has not been provided:
+            tally['block'][atr] = randint(1, max_instances)
         else:
-            tally['block'][atr] = randint(1, (max_instances if max_instances else 3))
+            # -- make sure the attribute we seek has a total value assigned to it:
+            tally['block'][atr] = attributes[block_type][atr]['count']
 
         block_shapes = list(block_sizes.keys())
 
@@ -72,11 +67,11 @@ def randomize_blocks(
             )
 
             # -- set the colour of the object:
-            if not bool(block_type):
+            if block_type == 'colours':
                 # -- set colour of the new object and normalize between 0 and 1:
-                rgb = [x / 255.0 for x in attributes['colours'][atr]]
+                rgb = [x / 255.0 for x in attributes['colours'][atr]['rgb']]
                 sim_interfacer.sim.setObjectColor(new_block, 0, sim_interfacer.sim.colorcomponent_ambient_diffuse, rgb)
-            else:
+            elif block_type == 'alphabets':
                 # -- set the texture for the alphabetic blocks:
                 sim_interfacer.sim.setShapeTexture(new_block, texture_objs[atr][1], sim_interfacer.sim.texturemap_cube, 15, block_size[:-1], None, [0, 0, math.pi])
 
@@ -100,44 +95,10 @@ def randomize_blocks(
     # -- shuffle the order of block placement:
     shuffle(all_objects)
 
-    if bool(block_type):
+    if block_type == 'alphabets':
         # -- delete texture objects if they are present:
         for L in texture_objs:
             sim_interfacer.sim.removeObjects([texture_objs[L][0]])
-
-    if add_tiles:
-
-        tally['tile'] = {C: 0 for C in attributes['colours']}
-
-        for atr in tally['tile']:
-            # -- set colour of the new object and normalize between 0 and 1:
-            rgb = [x / 255.0 for x in attributes['colours'][atr]]
-
-            # -- programmatically create a new tile:
-            new_tile = sim_interfacer.sim.createPrimitiveShape(
-                sim_interfacer.sim.primitiveshape_cuboid,
-                [0.08, 0.08, 0.02], 0,
-            )
-
-            # -- set the colour of the object:
-            sim_interfacer.sim.setObjectColor(new_tile, 0, sim_interfacer.sim.colorcomponent_ambient_diffuse, rgb)
-            sim_interfacer.sim.setObjectInt32Param(new_tile, sim_interfacer.sim.shapeintparam_edge_visibility, 1)
-
-            # -- set the name of the newly created object:
-            sim_interfacer.sim.setObjectAlias(new_tile, f'{atr}_tile')
-
-            # -- make the tile static but keep it respondable:
-            sim_interfacer.sim.setObjectInt32Param(new_tile, sim_interfacer.sim.shapeintparam_static, 1)
-            sim_interfacer.sim.setObjectInt32Param(new_tile, sim_interfacer.sim.shapeintparam_respondable, 1)
-
-            sim_interfacer.sim.setObjectOrientation(new_tile, [0, 0, -math.pi], -1)
-
-            all_objects.append(sim_interfacer.sim.getObject(f'/{atr}_tile'))
-
-            tally['tile'][atr] = 1
-
-        # -- make sure that the tiles are placed first, then the blocks:
-        all_objects.reverse()
 
     while True:
         try:
@@ -193,13 +154,14 @@ def randomize_blocks(
 
             break
 
-    new_path = os.path.abspath(path.replace('prototype', 'randomized'))
+    new_path = os.path.abspath(path.replace('prototype', f"randomized{f'_{suffix}' if suffix else ''}"))
     sim_interfacer.sim.saveScene(new_path)
 
     return new_path, tally
 
 
 def randomize_packing(
+        sim_interfacer: type[Interfacer],
         path: str,
         colours: dict = {
             'red': [255, 0, 0],
@@ -208,8 +170,6 @@ def randomize_packing(
         },
         num_empty_spots: int = 2,
     ) -> tuple[str, dict]:
-
-    sim_interfacer = Interfacer(scene_file_name=path)
 
     # intuition: we will randomly generate 1~4 boxes on the robot's table.
     num_spots = 4

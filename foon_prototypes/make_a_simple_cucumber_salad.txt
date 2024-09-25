@@ -1,0 +1,63 @@
+# Toy Example of Cucumber Salad
+//
+O3	cucumber	1
+S43	whole
+O2	cutting board	0
+S43	empty
+M0	pick-and-drop	<Assumed>
+O3	cucumber	1
+S43	whole
+S43	on	[cutting board]
+O2	cutting board	0
+S43	contains	{cucumber}
+//
+O3	cucumber	0
+S43	whole
+S43	on	[cutting board]
+O3	knife	1
+M0	chop	<Assumed>
+O3	cucumber	0
+S43	chopped
+S43	on	[cutting board]
+//
+O2	cutting board	0
+S43	contains	{cucumber}
+O3	cucumber	1
+S43	chopped
+S43	on	[cutting board]
+O2	bowl	0
+S43	empty
+M0	pick-and-drop	<Assumed>
+O3	cucumber	1
+S43	chopped
+S43	in	[bowl]
+O2	bowl	0
+S43	contains	{cucumber}
+//
+O2	bowl	0
+S43	contains	{cucumber}
+O2	bottle	1
+S43	contains	{salad dressing}
+O43	salad dressing	1
+S43	in	[bottle]
+M0	pour	<Assumed>
+O2	bowl	0
+S43	contains	{cucumber,salad dressing}
+O43	salad dressing	1
+S43	in	[bowl]
+//
+O2	bowl	0
+S43	contains	{cucumber,salad dressing}
+O43	salad dressing	0
+S43	in	[bowl]
+O3	cucumber	0
+S43	chopped
+S43	in	[bowl]
+O2	spoon	1
+M4	mix	<Assumed>
+O2	bowl	0
+S43	contains	{cucumber salad}
+O8	cucumber salad	1
+S43	contains	{cucumber,salad dressing}
+S43	in	[bowl]
+//

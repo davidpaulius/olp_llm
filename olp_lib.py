@@ -6,6 +6,9 @@ import pickle
 import json
 import tiktoken
 import numpy as np
+import pandas as pd
+import shutil
+from datetime import datetime as dt
 
 FOON_API_path = './foon_to_pddl/foon_api'
 if FOON_API_path not in sys.path:
@@ -29,6 +32,8 @@ from pathlib import Path
 from sklearn.metrics.pairwise import cosine_similarity
 from typing import Type
 
+##############################################################################################################
+# NOTE: LLM INTERFACER OBJECTS BELOW:
 ##############################################################################################################
 
 class OpenAIInterfacer(object):
@@ -147,6 +152,7 @@ class GeminiInterfacer(object):
 
         return genai.embed_content(model="models/text-embedding-004", content=text)
 
+##############################################################################################################
 
 def cos_similarity(
         openai_obj: Type[OpenAIInterfacer],
@@ -175,6 +181,7 @@ def cos_similarity(
 def chat_with_llm(
         openai_obj: Type[OpenAIInterfacer],
         chat_history: list,
+        args: dict = {},
     ):
 
     while True:
@@ -184,7 +191,7 @@ def chat_with_llm(
 
         chat_history.extend([{"role": "user", "content": prompt}])
 
-        _, response = openai_obj.prompt(chat_history)
+        _, response = openai_obj.prompt(chat_history, args)
         chat_history.extend([{"role": "assistant", "content": response}])
 
         print(f"\n{'*' * 50}\nuser: {prompt}\nGPT: {response}\n{'*' * 50}\n")
@@ -193,7 +200,7 @@ def chat_with_llm(
 
 
 def parse_llm_code(
-        llm_output: dict,
+        llm_output: str,
         separator: str = " ",
     ) -> str:
     if "```" not in llm_output:
@@ -210,78 +217,83 @@ def llm_grounding_sim_objects(
         openai_obj: Type[OpenAIInterfacer],
         objects_in_OLP: list[str],
         objects_in_sim: list[str],
-        original_predicates: dict,
-        previous_mapping: list = None,
+        state_as_text: str = None,
+        task: str = None,
         verbose: bool = False,
     ) -> dict:
 
     # -- prompt LLMs to perform object grounding
     #       (remove any objects that do not require grounding -- these are handled by the task planner system):
-    objects_in_OLP = list(set(objects_in_OLP) - set(['hand', 'air', 'nothing', 'robot', 'table']))
+    objects_in_OLP = list(set(objects_in_OLP) - set(['hand', 'air', 'nothing', 'robot', 'table', 'work surface']))
 
     if verbose:
         print("\t-> objects in OLP:", objects_in_OLP)
         print("\t-> objects in scene:", objects_in_sim)
         print()
 
-    interaction = [
-        {
-            "role": "user",
-            "content": (
-                "Assign each simulated object to a real-world object."
-                " You can only assign each object once."
-                " Make sure that the assigned objects are as **semantically close** as possible."
-                " Format your answer as a Python dictionary."
-                f"\nReal-world objects: {objects_in_OLP}"
-                f"\nSimulated objects: {objects_in_sim}"
-                "\nExample: {'object_1': 'sim_object_1', 'object_2': 'sim_object_2', ...}"
-            )
-        }
-    ]
+    real_objects, sim_objects = list(objects_in_OLP), list(objects_in_sim)
 
-    if previous_mapping:
-        interaction.extend([{
-            "role": "user",
-            "content": f"Use this previously constructed object assignment to refine your answer: {previous_mapping}"
-        }])
+    object_mapping = dict()
 
-    _, response = openai_obj.prompt(interaction)
-    interaction.extend([{
-        "role": "assistant",
-        "content": response,
-    }])
+    interaction = []
 
-    regex_matches = re.findall(r'\{.+\}', str(parse_llm_code(response)))
+    assert bool(real_objects), "empty objects?"
 
-    if verbose:
-        print(json.dumps(interaction, indent=4))
+    # -- we only prompt the LLM if there are objects we haven't gotten groundings for:
 
-    grounded_predicates = dict(original_predicates)
+    if state_as_text and task:
+        prompt_with_state = (
+            f"Your task is to map object names to simulation objects for the task \"{task}\"). "
+            f"Create a mapping that will reduce the number of actions needed by the robot. "
+            "Example 1:"
+            "\n- Action: \"Put first block on second block\""
+            "\n- Object names: [\"first block\", \"second block\"]"
+            "\n- Simulated objects: [\"block_1\", \"block_2\"]"
+            "\n- Environment State:"
+            "\n  - \"block_1\" is on \"block_2\""
+            "\n  - \"block_2\" is under \"block_1\""
+            "\n- Object mapping: \{\"first block\": \"block_1\", \"second block\": \"block_2\"\} (since \"block_1\" on \"block_2\" satisfies the action)"
+            "\n\nExample 2:"
+            "\n- Action: \"Put first block on second block\""
+            "\n- Object names: [\"first block\", \"second block\"]"
+            "\n- Simulated objects: [\"block_1\", \"block_2\"]"
+            "\n- Environment State:"
+            "\n  - \"block_2\" is on \"block_1\""
+            "\n  - \"block_1\" is under \"block_2\""
+            "\n- Object mapping: \{\"first block\": \"block_2\", \"second block\": \"block_1\"\} (since \"block_1\" on \"block_2\" satisfies the action)"
+        )
 
-    if bool(regex_matches):
-        # -- this means that the LLM has proposed some object groundings for us:
-        object_mapping = eval(regex_matches.pop())
+        interaction.extend([{"role": "system", "content": prompt_with_state}])
 
-        # -- parse the goal predicates and replace the generic object names with those of the sim objects:
-        for key in grounded_predicates:
-            for x in range(len(original_predicates[key])):
-                grounded_pred_parts = []
-                for obj in grounded_predicates[key][x][1:-1].split(' '):
-                    # -- some predicate args will be split with trailing parentheses (in the case of "not" predicates):
-                    obj_no_parentheses = obj.replace('(', '').replace(')', '')
-                    # -- we should only do label swapping if the whole argument exists in the grounding map:
-                    grounded_pred_parts.append(obj if obj_no_parentheses not in object_mapping else object_mapping[obj_no_parentheses])
+    prompt_for_mapping = (
+        "Map every object name to the best simulation object candidate from the provided list. "
+        "Do not assign each object more than once. "
+        "Format your answer as a Python dictionary without any explanation. "
+        f"\nObject names: {real_objects}"
+        f"\nSimulation objects: {sim_objects}"
+        f"\nEnvironment State:\n{state_as_text}" if state_as_text else ""
+    )
 
-                # -- overwrite the ungrounded predicate with the grounded in simulation version:
-                grounded_predicates[key][x] = f"({' '.join(grounded_pred_parts).strip()})"
+    interaction.extend([{"role": "user", "content": prompt_for_mapping}])
+
+    while True:
+        _, response = openai_obj.prompt(interaction)
+        regex_matches = re.findall(r'\{(?<={)[^}]*\}', str(parse_llm_code(response)))
 
         if verbose:
-            print("before grounding:", json.dumps(original_predicates, indent=4))
-            print("after grounding:", json.dumps(grounded_predicates, indent=4))
+            print(json.dumps(interaction, indent=4))
 
-        return [object_mapping, grounded_predicates]
+        if bool(regex_matches):
+            # -- this means that the LLM has proposed some object groundings for us:
 
-    return None
+            # -- now we will consolidate all object groundings into an updated dictionary:
+            object_mapping.update(eval(regex_matches.pop()))
+
+            interaction.extend([{"role": "assistant", "content": response}])
+
+            break
+
+    return object_mapping, interaction
 
 
 def llm_grounding_pddl_types(
@@ -362,7 +374,7 @@ def codify_FOON(
             'action': functional_unit.getMotionNode().getMotionLabel(),
             'required_objects': list(object_states.keys()),
             'object_states': object_states,
-            # 'instruction': functional_unit.toSentence()
+            'instruction': functional_unit.toSentence(),
         })
 
         if verbose:
@@ -377,28 +389,39 @@ def codify_FOON(
 def llm_summarize_FOON(
         openai_obj: Type[OpenAIInterfacer],
         FOON: list[fga.FOON.FunctionalUnit],
-        verbose: bool = True,
-    ):
+        verbose: bool = False,
+    ) -> list[str]:
 
     interaction = [{
         "role": "user",
         "content": (
-            "Summarize the following plan (codified as a JSON dictionary) as a concise list of instructions:"
-            f"\n\n{codify_FOON(FOON, verbose)}"
+            "Below is a plan given as a JSON: a plan consists of a list of actions to complete a task. "
+            "Summarize each action into a concise set of instructions. "
+            f"Use only one sentence per action.\n\n{codify_FOON(FOON, verbose)}"
         )
     }]
 
-    _, response = openai_obj.prompt(interaction)
+    _, task_steps = openai_obj.prompt(interaction)
     interaction.extend([{
         "role": "assistant",
-        "content": response,
+        "content": task_steps,
+    }])
+
+    interaction.extend([{
+        "role": "user",
+        "content": "Write a concise sentence describing the plan's objective or task."
+    }])
+
+    _, task_description = openai_obj.prompt(interaction)
+    interaction.extend([{
+        "role": "assistant",
+        "content": task_description,
     }])
 
     if verbose:
-        print(response)
+        print(interaction)
 
-    return response
-
+    return task_description, list(filter(None, task_steps.split('\n')))
 
 def generate_from_FOON(
         openai_obj: Type[OpenAIInterfacer],
@@ -406,6 +429,9 @@ def generate_from_FOON(
         FOON_samples: list,
         scenario: dict = None,
         system_prompt_file: str = "./llm_prompts/foon_system_prompt.txt",
+        human_feedback: bool = False,
+        use_embedding: bool = True,
+        top_k: int = 3,
         verbose: bool = True,
     ) -> tuple[dict, list]:
 
@@ -445,154 +471,185 @@ def generate_from_FOON(
     if verbose:
         print(f"{'*' * 75}\nStage 1 Prompting:\n{'*' * 75}")
 
-    # -- get a list of instructions that satisfies the given prompt:
-    stage1a_prompt = f"Generate a plan for the task. Think step by step and follow all instructions."
-    interaction.extend([{"role": "user", "content": stage1a_prompt}, ])
+    encoded_FOONs = []
+    for x in range(len(FOON_samples)):
+        # -- use the LLM to summarize the FOON samples we have in our repository:
+        task, steps = llm_summarize_FOON(openai_obj, FOON_samples[x]['foon'])
 
-    _, stage1a_response = openai_obj.prompt(interaction, verbose=verbose)
-    if verbose:
-        print(f"{'*' * 75}\nStage 1 Response:\n{stage1a_response}\n{'*' * 75}")
+        encoded_FOONs.append({
+            'task_description': task,
+            'language_plan': "\n".join(steps),
+            'json': codify_FOON(FOON_samples[x]['foon']),
+        })
 
-    stage1b_prompt = "Make a list of atomic objects used for this task in the following format: 'all_objects: [\"object_1\", \"object_2\", \"object_3\", ...]'. "\
-        "If there are several instances of an object type, list them individually (e.g., 'first apple', 'second apple' if two apples are used)."
+    top_k_foons = None
 
-    interaction.extend([
-        {"role": "assistant", "content": stage1a_response},
-        {"role": "user", "content": stage1b_prompt}
-    ])
+    if not use_embedding:
+        # -- first, we are gonna give LLM context about the FOON generation task as a system prompt:
+        stage1a_prompt = (
+            "Below are a list of prototype task descriptions."
+            f" Pick no more than {top_k} tasks that are most similar to the new task prompt."
+            " Give your answer as a Python list without explanation like \"[<num>, <num>, <num>]\", where <num> refers to the tasks below."
+            "\n\nPrototype tasks:"
+        )
+
+        for x in range(len(encoded_FOONs)):
+            stage1a_prompt = f"{stage1a_prompt}\n- Task Description #{x+1}:\n{encoded_FOONs[x]['task_description']}"
+
+        if verbose:
+            print(stage1a_prompt)
+
+        interaction.extend([{"role": "user", "content": stage1a_prompt}, ])
+
+        _, stage1a_response = openai_obj.prompt(interaction, verbose=verbose)
+        if verbose:
+            print(f"{'*' * 75}\nStage 1 Response:\n{stage1a_response}\n{'*' * 75}")
+
+        interaction.extend([{"role": "assistant", "content": stage1a_response}, ])
+
+        top_k_foons = eval(stage1a_response)
+
+    else:
+        # -- we will use text embedding to decide upon the top 3 most similar task descriptions:
+        task_relevance_scores = []
+
+        query_vec = openai_obj.embed(query, verbose=verbose)
+        for x in range(len(encoded_FOONs)):
+            # -- find text similarity using cosine similarity:
+            score = cos_similarity(
+                openai_obj=openai_obj,
+                vec_1=query_vec,
+                vec_2=openai_obj.embed(encoded_FOONs[x]['task_description'], verbose=verbose))
+
+            task_relevance_scores.append((x+1, score))
+
+        # -- sort them in descending order:
+        task_relevance_scores.sort(key=lambda x: x[1], reverse=True)
+
+        top_k_foons = [x[0] for x in task_relevance_scores[:min(len(task_relevance_scores), top_k)]]
+
+    # -- now that we've identified similar task descriptions, we will now ask the LLM to implicitly pick the FOON that closely resembles this current task:
+    stage1b_prompt = (
+        "Out of the following prototype task plans, select the one closest to the new task prompt."
+        " Give your answer as \"Prototype #<num>\", where <num> refers to a task number."
+    )
+
+    for x in top_k_foons:
+        stage1b_prompt = f"{stage1b_prompt}\n\nPrototype Task #{x}:\n{encoded_FOONs[x-1]['language_plan']}"
+
+    interaction.extend([{"role": "user", "content": stage1b_prompt}, ])
 
     _, stage1b_response = openai_obj.prompt(interaction, verbose=verbose)
     if verbose:
         print(f"{'*' * 75}\nStage 1 Response:\n{stage1b_response}\n{'*' * 75}")
 
+    interaction.extend([{"role": "assistant", "content": stage1b_response}, ])
+
+    selected_example = int(stage1b_response.split("#")[-1]) - 1
+
     if verbose:
-        print(f"{'*' * 75}\nStage 2 Prompting:\n{'*' * 75}")
-
-    stage2_prompt = " ".join([
-        "Now that you have thought of a possible plan, format your plan as a JSON dictionary.",
-        "Note the JSON format: each required object should have a corresponding entry in \"object_states\".",
-        f"Use the following JSON prototype as a reference:\n{codify_FOON(FOON_samples[-1]['foon'])}"
-    ])
-
-    interaction.extend([
-        {"role": "assistant", "content": stage1b_response},
-        {"role": "user", "content": stage2_prompt}
-    ])
-
-    _, stage1b_response = openai_obj.prompt(interaction, verbose=verbose)
-    if verbose:
-        print(f"{'*' * 75}\nStage 1 Response:\n{stage1b_response}\n{'*' * 75}")
-
-    breakpoint()
-
+        print(selected_example)
 
     ######################################################################################
     # NOTE: Stage 2 prompting:
     ######################################################################################
-    """
+
     if verbose:
         print(f"{'*' * 75}\nStage 2 Prompting:\n{'*' * 75}")
 
-    stage2_user_msg = open(stage2_sys_prompt_file, 'r').read().replace(
-        "<obj_set>", str(all_objects))
-
-    stage2_prompt = f"{stage2_user_msg}\n\nFormat your output as a JSON dictionary."
-
-    # NOTE: we will be selecting a random example from a JSON file containing examples:
-    # -- sort examples in descending order of scoring and add them to the prompt:
-    sorted_examples = top_fewshot_examples(
-        openai_obj,
-        fewshot_examples,
-        query,
-        verbose=verbose
+    # -- get a list of instructions that satisfies the given prompt:
+    stage2a_prompt = (
+        f"Generate a concise plan using the prototype as inspiration for the task: {query}."
+        " Follow all guidelines. "
+        " Give evidence to support your plan logic."
     )
 
-    for x in range(num_fewshot): # NOTE: change the argument for more few-shot examples
-        stage2_prompt = f"{stage2_prompt}\n\nExample #{x+1}:\n{json.dumps(sorted_examples[x], indent=4)}"
+    interaction.extend([{"role": "user", "content": stage2a_prompt}])
 
+    _, stage2a_response = openai_obj.prompt(interaction, args={'temperature': 0.2}, verbose=verbose)
     if verbose:
-        print(stage2_prompt)
+        print(f"{'*' * 75}\nStage 2a Response:\n{stage2a_response}\n{'*' * 75}")
 
     interaction.extend([
-        {"role": "assistant", "content": stage1b_response},
-        {"role": "user", "content": stage2_prompt}
+        {"role": "assistant", "content": stage2a_response}
     ])
 
-    # -- this is to make sure we continue prompting in the case where the response from the LLM was cut off:
+    if human_feedback:
+        input(f"Give your opinion on the plan sketch given by the LLM: {stage2a_response}")
+        interaction = chat_with_llm(openai_obj, interaction, {"temperature": 0.2})
+
+    stage2b_prompt = (
+        "Make a Python list of used objects in the following format: [\"object_1\", \"object_2\", ...]'. "
+        "If there are several instances of an object type, list them individually (e.g., ['first apple', 'second apple'] if two apples are used). "
+        "Do not add any explanation."
+    )
+
+    interaction.extend([
+        {"role": "user", "content": stage2b_prompt}
+    ])
+
+    _, stage2b_response = openai_obj.prompt(interaction, verbose=verbose,)
+    if verbose:
+        print(f"{'*' * 75}\nStage 2b Response:\n{stage2b_response}\n{'*' * 75}")
+
+    required_objects = eval(parse_llm_code(stage2b_response))
+
+    stage2c_prompt = (
+        "Format your generated plan as a JSON dictionary. "
+        "List as many states as possible when describing each object's preconditions and effects. "
+        "Each required object should match a key in \"object_states\": Be consistent with object names across actions. "
+        f"Use this JSON prototype as reference:\n\n{codify_FOON(FOON_samples[selected_example]['foon'])}"
+    )
+
+    interaction.extend([
+        {"role": "assistant", "content": stage2b_response},
+        {"role": "user", "content": stage2c_prompt}
+    ])
+
+    # -- check if there is some sort of break between responses given by the LLM:
+    plan_as_json = None
+
     entire_response = []
     while True:
-        _, stage2_response = openai_obj.prompt(
+        _, stage2c_response = openai_obj.prompt(
             interaction,
             verbose=verbose)
-        interaction.extend([{"role": "assistant", "content": stage2_response}])
-        entire_response.append(stage2_response)
+
+        entire_response.append(stage2c_response)
 
         try:
-            # -- use eval() function to parse through the Stage 2 prompt response obtained from LLM:
-            object_level_plan = eval(parse_llm_code("".join(entire_response)))
+            # -- use eval() function to parse response obtained from  as a dictionary:
+            plan_as_json = eval(parse_llm_code("".join(entire_response)))
         except SyntaxError as err:
             print(f"--warning: EOL (overflow): {err.msg}")
+            interaction.extend([{"role": "assistant", "content": stage2c_response}])
         else: break
 
-    if verbose:
-        print(f"{'*' * 75}\nStage 2 Response:\n{stage2_response}\n{'*' * 75}")
-        print(f" -- total number of tokens: {openai_obj.num_tokens(stage2_response)}")
-
-    ######################################################################################
-    # NOTE: Stage 3 prompting:
-    #   -- this involves asking the LLM about the key step(s) that
-    #       will represent the final state for the entire object-level plan
-    ######################################################################################
+    assert bool(plan_as_json), "Something went wrong here?"
 
     if verbose:
-        print(f"{'*' * 75}\nStage 3 Prompting:\n{'*' * 75}")
+        print(plan_as_json)
 
-    stage3_prompt = open(stage3_sys_prompt_file, 'r').read()
-    interaction.extend([{"role": "user", "content": stage3_prompt}])
+    interaction.extend([{"role": "assistant", "content": "".join(entire_response)}])
 
-    _, stage3_response = openai_obj.prompt(interaction, verbose=verbose)
-    if verbose:
-        print(f"{'*' * 75}\nStage 3 Response:\n{stage3_response}\n{'*' * 75}")
-        print(f" -- total number of tokens: {openai_obj.num_tokens(stage3_response)}")
-
-    stage3_terminalSteps = eval(re.findall(r'\[.+?\]', stage3_response)[0])
-
-    ######################################################################################
-    # NOTE: Stage 4 prompting:
-    #   -- this involves getting a state summary dictionary
-    #       for archiving the generated OLP and making it easy to retrieve from cache
-    ######################################################################################
-
-    if verbose:
-        print(f"{'*' * 75}\nStage 4 Prompting:\n{'*' * 75}")
-
-    stage4_prompt = open(stage4_sys_prompt_file, 'r').read()
-
-    interaction.extend([
-        {"role": "assistant", "content": stage3_response},
-        {"role": "user", "content": stage4_prompt},
-    ])
-
-    _, stage4_response = openai_obj.prompt(interaction, verbose=verbose)
-    if verbose:
-        print(f"{'*' * 75}\nStage 4 Response:\n{stage4_response}\n{'*' * 75}")
-
-    interaction.extend([{"role": "assistant", "content": stage4_response}, ])
+    language_plan = []
+    for action in plan_as_json['plan']:
+        language_plan.append(f"{action['step']}. {action['instruction']}")
 
     # -- returning parsed content as well as chat history for further interaction (and testing):
     llm_output = {
-        'summary': summary,
-        'language_plan': stage1a_response,
-        'all_objects': all_objects,
-        'object_level_plan': object_level_plan,
-        'final_state': eval(parse_llm_code(stage4_response)),
-        'termination_steps': stage3_terminalSteps,
+        "task_prompt": query,
+        "all_objects": required_objects,
+        "language_plan": language_plan,
+        "object_level_plan": plan_as_json,
     }
 
     return llm_output, interaction
-    """
+
 
 ###################################################################################################################
+# NOTE: COMPREHENSIVE OBJECT-LEVEL PLANNING METHODS:
+##############################################################################################################
 
 def top_fewshot_examples(
         openai_obj: Type[OpenAIInterfacer],
@@ -605,7 +662,7 @@ def top_fewshot_examples(
     if 'olp' in method:
         # -- we only find the closest examples for stage 2 prompting for OLP:
         select_examples = fewshot_examples[f'{method[0]}_examples']['stage2']
-    elif 'llm+p' in method:
+    elif 'llm+p' in method or 'delta' in method:
         # -- we will provide a few examples per task type:
         select_examples = fewshot_examples[f'{method[0]}_examples'][method[1]]
     else: return None
@@ -626,6 +683,82 @@ def top_fewshot_examples(
     sorted_examples = [x for _, x in sorted(zip(scores, select_examples), reverse=True)]
 
     return sorted_examples
+
+
+def embed_olp(
+        openai_obj: Type[OpenAIInterfacer],
+        llm_output: dict,
+        func_units: Type[fga.FOON.FunctionalUnit],
+        embedding_fpath: str = 'olp_embeddings.pkl',
+        verbose: bool = False
+    ) -> None:
+
+    # NOTE: this function will be used to create a storage file with embeddings that will be used for retrieval
+
+    embeds = []
+    # -- check if there is an existing embedding file:
+    if os.path.exists(embedding_fpath):
+        with open(embedding_fpath, 'rb') as ef:
+            while True:
+                try:
+                    embeds.extend(pickle.load(ef))
+                except EOFError:
+                    break
+
+    text_to_embed = (
+        f"Task Prompt: {llm_output['task_prompt']}"
+        f"\nTask Plan:\n{llm_output['language_plan']}"
+        f"\nRequired Objects:{llm_output['all_objects']}"
+    )
+
+    embeds.append({
+        'llm_output': llm_output,
+        'functional_units': func_units,
+        'embedding': openai_obj.embed(text_to_embed, verbose=verbose),
+    })
+
+    if verbose: print(embeds)
+
+    pickle.dump(embeds, open(embedding_fpath, 'wb'))
+
+
+def find_similar_olp(
+        openai_obj: Type[OpenAIInterfacer],
+        query: str,
+        embedding_fpath: str = 'olp_embeddings.pkl',
+        verbose: bool = False,
+        top_k: int = 3,
+    ) -> dict:
+
+    # NOTE: this function will iterate through all of the
+
+    embeds = []
+    # -- check if there is an existing embedding file:
+    if os.path.exists(embedding_fpath):
+        with open(embedding_fpath, 'rb') as ef:
+            while True:
+                try:
+                    embeds.extend(pickle.load(ef))
+                except EOFError:
+                    break
+
+    else: return None
+
+    if not bool(embeds):
+        return None
+
+    task_scores = []
+    for E in range(len(embeds)):
+        score = cos_similarity(
+            openai_obj=openai_obj,
+            vec_1=embeds[E]['embedding'],
+            str_2=query)
+
+        task_scores.append((embeds[E], score))
+
+    task_scores.sort(key=lambda x: x[1])
+
+    return task_scores[:min(len(task_scores), top_k)]
 
 
 def generate_olp(
@@ -777,6 +910,8 @@ def generate_olp(
             print(f"--warning: EOL (overflow): {err.msg}")
         else: break
 
+    assert bool(object_level_plan), "Something went wrong here?"
+
     if verbose:
         print(f"{'*' * 75}\nStage 2 Response:\n{stage2_response}\n{'*' * 75}")
         print(f" -- total number of tokens: {openai_obj.num_tokens(stage2_response)}")
@@ -822,93 +957,21 @@ def generate_olp(
 
     interaction.extend([{"role": "assistant", "content": stage4_response}, ])
 
+    language_plan = []
+    for action in object_level_plan:
+        language_plan.append(f"{action['step']}. {action['instruction']}")
+
     # -- returning parsed content as well as chat history for further interaction (and testing):
     llm_output = {
-        'summary': summary,
-        'language_plan': stage1a_response,
+        'task_prompt': query,
         'all_objects': all_objects,
-        'object_level_plan': object_level_plan,
+        'language_plan': language_plan,
+        'plan': object_level_plan,
         'final_state': eval(parse_llm_code(stage4_response)),
         'termination_steps': stage3_terminalSteps,
     }
 
     return llm_output, interaction
-
-
-def embed_olp(
-        openai_obj: Type[OpenAIInterfacer],
-        llm_output: dict,
-        func_units: Type[fga.FOON.FunctionalUnit],
-        embedding_fpath: str = 'olp_embeddings.pkl',
-        verbose: bool = False
-    ) -> None:
-
-    # NOTE: this function will be used to create a storage file with embeddings that will be used for retrieval
-
-    embeds = []
-    # -- check if there is an existing embedding file:
-    if os.path.exists(embedding_fpath):
-        with open(embedding_fpath, 'rb') as ef:
-            while True:
-                try:
-                    embeds.extend(pickle.load(ef))
-                except EOFError:
-                    break
-
-    text_to_embed = (
-        f"Task Prompt: {llm_output['object_level_plan']['task_prompt']}"
-        #  f"\nTask Plan:\n{llm_output['language_plan']}"
-        #  f"\nRequired Objects:{llm_output['all_objects']}"
-    )
-
-    embeds.append({
-        'llm_output': llm_output,
-        'functional_units': func_units,
-        'embedding': openai_obj.embed(text_to_embed, verbose=verbose),
-    })
-
-    if verbose: print(embeds)
-
-    pickle.dump(embeds, open(embedding_fpath, 'wb'))
-
-
-def find_similar_olp(
-        openai_obj: Type[OpenAIInterfacer],
-        query: str,
-        embedding_fpath: str = 'olp_embeddings.pkl',
-        verbose: bool = False,
-        top_k: int = 3,
-    ) -> dict:
-
-    # NOTE: this function will iterate through all of the
-
-    embeds = []
-    # -- check if there is an existing embedding file:
-    if os.path.exists(embedding_fpath):
-        with open(embedding_fpath, 'rb') as ef:
-            while True:
-                try:
-                    embeds.extend(pickle.load(ef))
-                except EOFError:
-                    break
-
-    else: return None
-
-    if not bool(embeds):
-        return None
-
-    task_scores = []
-    for E in range(len(embeds)):
-        score = cos_similarity(
-            openai_obj=openai_obj,
-            vec_1=embeds[E]['embedding'],
-            str_2=query)
-
-        task_scores.append((embeds[E], score))
-
-    task_scores.sort(key=lambda x: x[1])
-
-    return task_scores[:min(len(task_scores), top_k)]
 
 
 def repair_olp(
@@ -1075,9 +1138,9 @@ def repair_olp(
                 print(f"--warning: EOL (overflow): {err.msg}")
             else: break
 
-        new_plan_sketch = '\n'.join([f"{str(x['step'])}. {x['instruction']}" for x in revised_olp['all_instructions']])
+        new_plan_sketch = '\n'.join([f"{str(x['step'])}. {x['instruction']}" for x in revised_olp['plan']])
         new_reqs = []
-        for x in revised_olp['all_instructions']:
+        for x in revised_olp['plan']:
             new_reqs.extend(x['required_objects'])
 
         if verbose:
@@ -1118,8 +1181,8 @@ def olp_to_FOON(
     # -- create a functional unit prototype:
     functionalUnit = fga.FOON.FunctionalUnit()
 
-    olp = llm_output['object_level_plan']['all_instructions'][index]
-    olp_objects = llm_output['object_level_plan']['all_objects']
+    olp = llm_output['object_level_plan']['plan'][index]
+    olp_objects = llm_output['all_objects']
 
     used_objects, action = olp['required_objects'], olp['action']
 

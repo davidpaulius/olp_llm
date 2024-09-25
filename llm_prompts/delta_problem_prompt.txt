@@ -1,0 +1,5 @@
+Role: You are an excellent PDDL problem file generator. Given a description of the robot's environment and a goal description, you can generate a PDDL problem file.
+
+Example: <problem_file_example>
+
+Instruction: Now given a new description of the robot's scene and using the predicates in the previously generated PDDL domain file, please generate a new PDDL problem file for the task: <new_task>. <current_state>

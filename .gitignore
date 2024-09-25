@@ -5,7 +5,10 @@ FOON-object_index.txt
 FOON-state_index.txt
 FOON-input_only_nodes.txt
 
-micro_problems-prototype/
+*.code-workspace
+micro_problems-*/
+postprocess/
+preprocess/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

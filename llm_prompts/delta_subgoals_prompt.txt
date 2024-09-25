@@ -1,0 +1,5 @@
+Role: You are an excellent assistant in decomposing long-term goals. Given a PDDL problem file, you can decompose the long-term goal in a sequence of sub-goals.
+
+Example: <subgoals_example>
+
+Instruction: Given the PDDL problem previously generated, please decompose the long-term goal into a sequence of subgoals considering the predicates and actions from the previously generated PDDL domain file. Simply list the decomposed PDDL subgoals for each instruction in a similar format as the example and only 1 level deep.

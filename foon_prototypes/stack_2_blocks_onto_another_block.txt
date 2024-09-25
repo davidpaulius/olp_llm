@@ -1,0 +1,22 @@
+# FOON Prototype: "Making a tower of three blocks"
+//
+O0	first block	0
+S0	on	[table]
+S1	under	[nothing]
+O1	second block	1
+S0	on	[table]
+S1	under	[nothing]
+O2	third block	1
+S0	on	[table]
+S1	under	[nothing]
+M0	pick and place	<Assumed>
+O0	first block	0
+S0	on	[table]
+S1	under	[second block]
+O1	second block	1
+S0	on	[first block]
+S1	under	[third block]
+O2	third block	1
+S0	on	[second block]
+S1	under	[nothing]
+//

@@ -25,7 +25,17 @@ def getConfig():
 
 def setConfig(config):
     for J in range(len(self.joint_handles)):
+
         sim.setJointPosition(self.joint_handles[J], config[J])
+
+
+def stateValidationCallback(state):
+    savedState = simOMPL.readState(self.ompl_task)
+    simOMPL.writeState(self.ompl_task, state)
+    res, d, *_ = sim.checkDistance(self.robotCollection, sim.handle_all, self.maxDistance)
+    is_valid = (res == 1) and (d[6] > self.minDistance)
+    simOMPL.writeState(self.ompl_task, savedState)
+    return is_valid
 
 
 def configurationValidationCallback(config):
@@ -40,7 +50,7 @@ def configurationValidationCallback(config):
     objs_in_collision = []
     is_collision, handles = sim.checkCollision(self.robotCollection,sim.handle_all)
     if is_collision == 1 and handles[1] not in objs_in_collision:
-        objs_in_collision.append(sim.getObjectName(handles[1]))
+        objs_in_collision.append(sim.getObjectAlias(handles[1]))
 
     # -- restore original config:
     setConfig(tmp)
@@ -60,6 +70,7 @@ def path_planning(args):
         4. "num_attempts" :- the number of times to run OMPL (default: 20)
         5. "max_compute" :- the maximum time (in seconds) allotted to computing a solution
         6. "max_simplify" :- the maximum time (in seconds) allotted to simplifying a solution
+        7. "len_path" :- the number of states for path generation (default: leave it to OMPL)
     """
 
     # -- first check if the robot name and goal handle have been provided to the function:
@@ -84,6 +95,10 @@ def path_planning(args):
     max_simplify = -1
     if "max_simplify" in args: max_simplify = args["max_simplify"]
 
+    # -- len_path :- number of states for the path (default: 0 -- we leave it to OMPL)
+    len_path = 0
+    if "len_path" in args: len_path = args["len_path"]
+
     # -- arm_prefix :- you can define the name format for joints (in the case where maybe there is a particular
     #   set of joints for which you want to do motion planning -- e.g., Spot robot has arm joints separate to legs)
     if "arm_prefix" in args:
@@ -95,7 +110,7 @@ def path_planning(args):
 
     # -- num_ompl_attempts :- we have this functionality because simOMPL.compute() can reuse previously computed data
     #   Source: https://manual.coppeliarobotics.com/en/pathAndMotionPlanningModules.htm
-    num_ompl_attempts = 20
+    num_ompl_attempts = 5
     # -- check if the number of attempts for OMPL to solve a problem has been defined:
     if "num_attempts" in args: num_ompl_attempts = args["num_attempts"]
 
@@ -163,31 +178,34 @@ def path_planning(args):
         # -- found a robot config that matches the desired pose!
         sim.addLog(sim.getInt32Param(sim.intparam_verbosity), "[OMPLement] : valid configuration found!")
 
+        self.minDistance, self.maxDistance = float('1.0e-010'), 1.75
+
         # -- Now find a collision-free path (via path planning) that brings us from current config to the found config:
-        ompl_task = simOMPL.createTask('task')
-        simOMPL.setAlgorithm(ompl_task, algorithm)
-        simOMPL.setStateSpaceForJoints(ompl_task, self.joint_handles, self.joint_projections)
-        simOMPL.setCollisionPairs(ompl_task,[self.robotCollection, sim.handle_all])
-        simOMPL.setStartState(ompl_task,getConfig())
-        simOMPL.setGoalState(ompl_task,configs[0])
-        simOMPL.setStateValidityCheckingResolution(ompl_task, 0.001)
-        simOMPL.setVerboseLevel(ompl_task, 1)
-        simOMPL.setup(ompl_task)
+        self.ompl_task = simOMPL.createTask('task')
+        simOMPL.setAlgorithm(self.ompl_task, algorithm)
+        simOMPL.setStateSpaceForJoints(self.ompl_task, self.joint_handles, self.joint_projections)
+        simOMPL.setCollisionPairs(self.ompl_task,[self.robotCollection, sim.handle_all])
+        simOMPL.setStartState(self.ompl_task,getConfig())
+        simOMPL.setGoalState(self.ompl_task,configs[0])
+        simOMPL.setStateValidityCheckingResolution(self.ompl_task, 0.001)
+        simOMPL.setStateValidationCallback(self.ompl_task, stateValidationCallback)
+        simOMPL.setVerboseLevel(self.ompl_task, 1)
+        simOMPL.setup(self.ompl_task)
 
         for _ in range(num_ompl_attempts):
             # -- read more about compute operation here: https://manual.coppeliarobotics.com/en/simOMPL.htm#compute
-            result, path = simOMPL.compute(ompl_task,max_compute,max_simplify,0)
+            result, path = simOMPL.compute(self.ompl_task,max_compute,max_simplify,len_path)
 
             # -- we will see if there was an exact solution found;
             #    that way we know if we might need to loop back around again to find the solution
-            is_exact_solution = simOMPL.hasExactSolution(ompl_task)
+            is_exact_solution = simOMPL.hasExactSolution(self.ompl_task)
             sim.addLog(sim.getInt32Param(sim.intparam_verbosity), f"[OMPLement] : Exact solution? - {is_exact_solution}")
 
             # -- if no exact solution was found... then maybe we will compute again?
 
             if result and is_exact_solution:
                 # -- We found a collision-free path!
-                sim.addLog(sim.getInt32Param(sim.intparam_verbosity), f"[OMPLement] : Length of path: {int(simOMPL.getPathStateCount(ompl_task,path))}")
+                sim.addLog(sim.getInt32Param(sim.intparam_verbosity), f"[OMPLement] : Length of path: {int(simOMPL.getPathStateCount(self.ompl_task,path))}")
 
                 # NOTE: the path contains a Mx1 vector, which needs to be transformed to NxJ vector, where N = M/J.
                 # -- the final path will be stored as a NxJ matrix, where N = number of points in trajectory and J = number of joints.
@@ -201,11 +219,11 @@ def path_planning(args):
                 #    conf=simOMPL.getPathState(ompl_task,path,i+1)
                 #    final_path.append(conf)
 
-                assert simOMPL.getPathStateCount(ompl_task,path) == len(final_path), "[OMPLement] : error in path rebuild?"
+                assert simOMPL.getPathStateCount(self.ompl_task,path) == len(final_path), "[OMPLement] : error in path rebuild?"
 
                 break
 
-        simOMPL.destroyTask(ompl_task)
+        simOMPL.destroyTask(self.ompl_task)
 
     else:
         sim.addLog(sim.getInt32Param(sim.intparam_verbosity), "[OMPLement] : no configuration found!")

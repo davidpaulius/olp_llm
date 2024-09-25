@@ -13,6 +13,7 @@ from tqdm import tqdm
 from random import choice
 from typing import Type
 from scipy.interpolate import CubicSpline
+from scipy.stats import norm
 
 try:
     from coppeliasim_zmqremoteapi_client import RemoteAPIClient
@@ -21,6 +22,8 @@ except ImportError:
           'https://manual.coppeliarobotics.com/en/zmqRemoteApiOverview.htm')
     sys.exit()
 
+
+# pip3 install numpy scipy openai tiktoken scikit-learn tqdm pandas coppeliasim-zmqremoteapi-client nltk mysql-connector
 
 # NOTE: make sure you define the path to where the planners are located on your machine:
 # -- paths to the different planners on my PC:
@@ -31,7 +34,7 @@ if os.name == 'nt':
     path_to_planners['fast-downward'] = 'C:/Users/david/fast-downward-23.06/fast-downward.py'
 else:
     # -- this is the path to the planners on the Ubuntu side:
-    path_to_planners['fast-downward'] = '/home/david/fast-downward-22.06/fast-downward.py'
+    path_to_planners['fast-downward'] = '/media/master_oogway/ESD-ISO/ICRA-25/fast-downward-22.12/fast-downward.py'
 
 planner_to_use = 'fast-downward'
 
@@ -51,9 +54,11 @@ class Interfacer():
             self,
             scene_file_name: str,
             robot_name: str = "Panda",
+            robot_gripper: str = "Panda_gripper",
             port_number: int = None,
         ):
         self.robot_name = robot_name
+        self.robot_gripper = robot_gripper
 
         self.client = None
         if port_number:
@@ -62,6 +67,7 @@ class Interfacer():
         else:
             # -- just use the default port number:
             self.client = RemoteAPIClient(host='localhost')
+
 
         self.sim = self.client.require('sim')
         status = self.load_scenario(scene_file_name)
@@ -77,7 +83,7 @@ class Interfacer():
         # -- self-contained dictionaries containing object properties:
         self.object_positions, self.object_orientations, self.object_bb_dims = {}, {}, {}
 
-        self.start_pose = self.sim.getObjectPose(self.sim.getObject(f'/{self.robot_name}/target'), -1)
+        self.start_pose = self.sim.getObjectPose(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObject(f'/{self.robot_name}'))
 
         self.start_time = time.time()
 
@@ -119,11 +125,11 @@ class Interfacer():
 
         ideal_positions = [
             [-2.10, 0, 1.39],
-            [-1.75, 0, 2.5],
+            [-1.7, 0, 2.25],
         ]
         ideal_orientations = [
             [-math.pi, 1.40, -(math.pi/2.0)],
-            [-math.pi, 0.7, -(math.pi/2.0)],
+            [-math.pi, 0.8, -(math.pi/2.0)],
         ]
 
         # -- set the camera pose to an ideal view of the table-top scene:
@@ -186,7 +192,7 @@ class Interfacer():
             if obj_handle == -1:
                 print("Warning: '" + obj + "' does not exist!")
                 # -- if an object that exists in the scene was not found, then it possibly is attached to the robot's gripper:
-                obj_handle = sim.getObject(f'/{self.robot_name}_gripper_attachPoint/{obj}')
+                obj_handle = sim.getObject(f'/{self.robot_name}/{obj}')
 
             if obj_handle == -1:
                 print("Warning: '" + obj + "' does not exist!")
@@ -323,17 +329,17 @@ class Interfacer():
         pose = sim.getObjectPose(cam)
 
         config = {
-            'res': [1700, 1200],
+            'res': [1500, 1100],
             'renderMode': render_mode,
             'povray': {
                 'available': False,
-                'focalBlur': False,
+                'focalBlur': True,
                 'focalDistance': 2,
-                'aperture': 0.05,
+                'aperture': 0.15,
                 'blurSamples': 10,
             },
             'nearClipping': 0.01,
-            'farClipping': 250,
+            'farClipping': 200,
             'viewAngle': 60 * math.pi / 180
         }
 
@@ -405,7 +411,7 @@ class Interfacer():
                 # -- getting bounding box dimensions of objects in the scene:
                 if 'target' in x.lower():
                     # NOTE: the motion planning should consider the dimensions of the robot's gripper:
-                    obj_handle = sim.getObject(f'/{self.robot_name}_gripper')
+                    obj_handle = sim.getObject(f'/{self.robot_gripper}')
                 elif self.robot_name in x:
                     obj_handle = sim.getObject(f'/{self.robot_name}_link0_visual')
 
@@ -494,10 +500,19 @@ class Interfacer():
             object_positions, object_orientations = self.object_positions, self.object_positions
 
             # NOTE: we will also check from perception whether the hand is empty or not:
-            gripper_sensor = sim.getObject(f'/{self.robot_name}/{self.robot_name}_gripper_attachProxSensor')
-            gripper_attachPoint = sim.getObject(f'/{self.robot_name}/{self.robot_name}_gripper_attachPoint')
-
             is_grasping = False
+
+            # -- get the object handles for the gripper's attach point and proximity sensor:
+            gripper_attachPoint, gripper_sensor = -1, -1
+            children = sim.getObjectsInTree(sim.getObject(f"/{self.robot_name}"))
+            for C in children:
+                if "attachProxSensor" in sim.getObjectAlias(C):
+                    gripper_sensor = C
+                elif "attachPoint" in sim.getObjectAlias(C):
+                    gripper_attachPoint = C
+
+            if gripper_attachPoint == -1:
+                sys.exit("ERROR: robot gripper attach point was not found!")
 
             for obj in goal_objects:
                 obj_handle = sim.getObject(f'/{obj}')
@@ -511,8 +526,12 @@ class Interfacer():
                 if bool(is_in_hand) and obj_in_hand > -1:
                     is_grasping = True
 
-                    # -- checking to see if the hand is truly *on top* of the object:
-                    obj_position, obj_orientation = self.object_positions[obj_in_hand], self.object_orientations[obj_in_hand]
+                    try:
+                        # -- checking to see if the hand is truly *on top* of the object:
+                        obj_position, obj_orientation = self.object_positions[obj_in_hand], self.object_orientations[obj_in_hand]
+                    except KeyError:
+                        obj_position, obj_orientation = self.sim.getObjectPosition(obj_in_hand, -1), self.sim.getObjectOrientation(obj_in_hand, -1)
+
                     gripper_position = sim.getObjectPosition(sim.getObject(f'/{self.robot_name}/target'), -1)
                     gripper_orientation =  sim.getObjectOrientation(sim.getObject(f'/{self.robot_name}/target'), -1)
 
@@ -528,10 +547,11 @@ class Interfacer():
 
                     if is_similar_position and is_similar_orientation:
                         # -- we can now say that the hand is on top of the object:
-                        on_object_layout[obj_in_hand] = 'hand'
+                        on_object_layout[sim.getObjectAlias(obj_in_hand)] = 'hand'
+                        under_object_layout[sim.getObjectAlias(obj_in_hand)] = 'air'
 
-                    under_object_layout['hand'] = obj_in_hand
-                    in_object_layout['hand'] = obj_in_hand
+                    under_object_layout['hand'] = sim.getObjectAlias(obj_in_hand)
+                    in_object_layout['hand'] = sim.getObjectAlias(obj_in_hand)
 
             if not is_grasping:
                 # -- if there's nothing in the hand, just make it contain "air":
@@ -631,7 +651,7 @@ class Interfacer():
         # NOTE: the purpose of this function is to find empty places on the table for place actions:
 
         # -- get the current state and parameters of objects in the scene:
-        _ = self.get_sim_object_params()
+        _ = self.get_sim_object_params(verbose=False)
 
         table, empty_spots = [], []
 
@@ -661,10 +681,9 @@ class Interfacer():
 
             table.append(dummy)
 
-
         return empty_spots
 
-    def find_pose_for_ompl(self, target_object: str) -> list[float]:
+    def find_pose_for_ompl(self, target_object: str, verbose: bool = False) -> list[float]:
 
         robot = self.sim.getObject(f"/{self.robot_name}")
         target = self.sim.getObject(f"/{self.robot_name}/target")
@@ -675,31 +694,59 @@ class Interfacer():
             empty_spot = choice(self.find_empty_spots())
             index, target_object = empty_spot['index'], self.sim.getObjectAlias(empty_spot['handle'])
             self.sim.addLog(self.sim.getInt32Param(self.sim.intparam_verbosity), f"table grounding: found empty spot: /{target_object}[{empty_spot['index']}]")
-            print(f"table grounding: found empty spot: /{target_object}[{empty_spot['index']}]")
+            if verbose:
+                print(f"table grounding: found empty spot: /{target_object}[{empty_spot['index']}]")
 
         goal = self.sim.getObject(f"/{target_object}", {"index": index})
 
-        # -- Find a collision-free config that matches a specific pose:
-        goal_pose = self.sim.getObjectPose(goal, robot)
+        candidate_goal_poses = []
 
-        # -- determine the height based on whether there is an object in hand or not:
-        obj_in_hand = self.sim.getObjectChild(self.sim.getObject(f'/{self.robot_name}/{self.robot_name}_gripper_attachPoint'), 0)
-        if obj_in_hand != -1:
-            # -- first, we find a spot that sits RIGHT ON TOP of the surface...
-            goal_pose[2] += self.sim.getObjectFloatParam(goal, self.sim.objfloatparam_objbbox_max_z)
-            # ... then we will find a spot that considers the height of the object:
-            goal_pose[2] += self.sim.getObjectFloatParam(obj_in_hand, self.sim.objfloatparam_objbbox_max_z) * 1.75
+        for rotate in [0.0, (math.pi/2), (math.pi), (math.pi*2)]:
+            # -- Find a collision-free config that matches a specific pose:
+            goal_pose = self.sim.getObjectPose(goal, robot)
+
+            # -- get the object handles for the gripper's attach point:
+            gripper_attachPoint = -1
+            children = self.sim.getObjectsInTree(self.sim.getObject(f"/{self.robot_name}"))
+            for C in children:
+                if "attachPoint" in self.sim.getObjectAlias(C):
+                    gripper_attachPoint = C
+
+            if gripper_attachPoint == -1:
+                sys.exit("ERROR: robot gripper attach point was not found!")
+
+            # -- determine the height based on whether there is an object in hand or not:
+            obj_in_hand = self.sim.getObjectChild(gripper_attachPoint, 0)
+            if obj_in_hand != -1:
+                # -- first, we find a spot that sits RIGHT ON TOP of the surface...
+                goal_pose[2] += self.sim.getObjectFloatParam(goal, self.sim.objfloatparam_objbbox_max_z)
+                # ... then we will find a spot that considers the height of the object:
+                goal_pose[2] += self.sim.getObjectFloatParam(obj_in_hand, self.sim.objfloatparam_objbbox_max_z) * (1.5 if target_object not in ["table", "worksurface"] else 1.25)
+
+                # -- we also want to consider the orientation of the object
+                orientation = self.sim.getObjectOrientation(goal, target)
+                goal_pose[3:] = self.sim.buildPose(goal_pose[:3], [orientation[0], orientation[1], math.pi + rotate])[3:]
+
+            else:
+                # -- account for fingertip placement on object:
+                goal_pose[2] += self.sim.getObjectFloatParam(goal, self.sim.objfloatparam_objbbox_max_z) * 1.5
+                # -- try to match the orientation of the surface object:
+                orientation = self.sim.getObjectOrientation(goal, robot)
+                goal_pose[3:] = self.sim.buildPose(goal_pose[:3], [-(math.pi), orientation[1], orientation[2] + rotate])[3:]
+
+
+            candidate_goal_poses.append(goal_pose)
+
+        return candidate_goal_poses
+
+    def return_home(self, method: int = 1):
+        # -- return back to starting position:
+        if method == 1:
+            self.ompl_path_planning(None, self.start_pose, self.simOMPL.Algorithm.RRTConnect, 20, 5, 5, 0)
         else:
-            # -- find a spot that lies in a very safe spot above the object:
-            goal_pose[2] += self.sim.getObjectFloatParam(goal, self.sim.objfloatparam_objbbox_max_z) * 2
+            self.spline_path_planning(self.start_pose)
 
-        # -- keep the same orientation of the hand for pick-from-top actions:
-        gripper_pose = self.sim.getObjectPose(target, robot)
-        goal_pose[3:] = gripper_pose[3:]
-
-        return goal_pose
-
-    def path_planning(
+    def ompl_path_planning(
             self,
             target_object: str,
             goal_pose: list[float],
@@ -707,6 +754,10 @@ class Interfacer():
             num_ompl_attempts: int,
             max_compute: int,
             max_simplify: int,
+            len_path: int,
+            rgb: list[float] = [0.0, 1.0, 0.0],
+            draw_path: bool = False,
+            ignore_dynamics: bool = False,
         ) -> bool:
 
         # -- formatting the string name for printing a cool message:
@@ -716,7 +767,7 @@ class Interfacer():
         # -- create a dummy object that will represent the target goal:
         target_goal = self.sim.createDummy(0.025)
         self.sim.setObjectPose(target_goal, goal_pose, self.sim.getObject(f'/{self.robot_name}'))
-        self.sim.setObjectColor(target_goal, 0, self.sim.colorcomponent_ambient_diffuse, [0.0, 1.0, 0.0])
+        self.sim.setObjectColor(target_goal, 0, self.sim.colorcomponent_ambient_diffuse, rgb)
         self.sim.setObjectColor(target_goal, 0, self.sim.colorcomponent_emission, [0.6, 0.6, 0.6])
         self.sim.setObjectAlias(target_goal, 'OMPL_target')
 
@@ -724,8 +775,9 @@ class Interfacer():
         time.sleep(0.0001)
 
         ompl_script = self.sim.getScript(self.sim.scripttype_simulation, self.sim.getObject('/OMPLement'))
+
         path = self.sim.callScriptFunction(
-            'path_planning',
+            "ompl_path_planning",
             ompl_script,
             {
                 "robot": self.robot_name,
@@ -734,6 +786,7 @@ class Interfacer():
                 "num_attempts": num_ompl_attempts,
                 "max_compute": max_compute,
                 "max_simplify": max_simplify,
+                "len_path": len_path,
             },
         )
 
@@ -741,20 +794,53 @@ class Interfacer():
             self.sim.addLog(self.sim.getInt32Param(self.sim.intparam_verbosity), f'[OMPLement]: plan found!')
 
             # -- we need to disable the IK following done by the "target" dummy of the robot:
-            target = self.sim.getObject(f'/{self.robot_name}')
-            self.sim.setModelProperty(target, self.sim.modelproperty_scripts_inactive)
+            # self.sim.setModelProperty(target, self.sim.modelproperty_scripts_inactive)
+            ik_script = self.sim.getScript(self.sim.scripttype_simulation, self.sim.getObject(f"/{self.robot_name}"))
+            if ik_script == -1:
+                ik_script = self.sim.getScript(self.sim.scripttype_customization, self.sim.getObject(f"/{self.robot_name}"))
+
+            self.sim.setObjectInt32Param(ik_script, self.sim.scriptintparam_enabled, 0)
 
             self.start()
 
+            # -- use a cubic spline to interpolate time points:
+            cs = CubicSpline(
+                [0, 0.3, 0.5, 0.8, 1],
+                [float('2.5e-3'), float('2.0e-3'), float('1.0e-3'), float('2.0e-3'), float('2.5e-3')]
+            )
+            xs = np.arange(0, 1, 1/len(path))
+            time_points = cs(xs)
+
+            if draw_path: drawn_object = self.sim.callScriptFunction('visualizePath', ompl_script, path, rgb)
+
+            if ignore_dynamics:
+                for obj in self.objects_in_sim:
+                    obj_handle = self.sim.getObject(f"/{obj}", {"noError": True})
+                    if obj_handle != -1:
+                        self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_static, 1)
+                        # self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_respondable, 0)
+
+            time.sleep(0.01)
+
             # -- with the computed path, we will gradually change the configuration of the robot:
-            for P in path:
-                self.sim.callScriptFunction('setConfig', ompl_script, P)
-                time.sleep(0.0001)
+            for P in range(len(path)):
+                self.sim.callScriptFunction('setConfig', ompl_script, path[P])
+                time.sleep(time_points[P])
+
+            time.sleep(0.01)
+
+            if ignore_dynamics:
+                for obj in self.objects_in_sim:
+                    obj_handle = self.sim.getObject(f"/{obj}", {"noError": True})
+                    if obj_handle != -1:
+                        self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_static, 0)
+                        # self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_respondable, 1)
 
             # -- we need to re-enable the IK following done by the "target" dummy of the robot:
             self.sim.setObjectPosition(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObjectPosition(self.sim.getObject(f'/{self.robot_name}/tip')), -1)
             self.sim.setObjectOrientation(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObjectOrientation(self.sim.getObject(f'/{self.robot_name}/tip')), -1)
-            self.sim.setModelProperty(target, 0)
+            self.sim.setObjectInt32Param(ik_script, self.sim.scriptintparam_enabled, 1)
+            if draw_path: self.sim.removeDrawingObject(drawn_object)
 
         else:
             self.sim.addLog(self.sim.getInt32Param(self.sim.intparam_verbosity), f'[OMPLement]: plan not found!')
@@ -764,30 +850,159 @@ class Interfacer():
 
         return bool(path)
 
+    def spline_adjust_trajectory(self, T: list[float]):
+        ang_min = -0.7245
+        ang_max = -1.2130
+
+        trajectory = list(T)
+
+        for T in range(len(trajectory)):
+            if trajectory[1][-1] < ang_max:
+                trajectory[T][-1] += 2*math.pi;
+            elif trajectory[1][-1] > ang_min:
+                trajectory[T][-1] -= 2*math.pi;
+
+        return trajectory
+
+    def spline_path_planning(
+            self,
+            goal_pose: list[float],
+            num_ompl_attempts: int  = 5,
+        ) -> bool:
+
+        ompl_script = self.sim.getScript(self.sim.scripttype_simulation, self.sim.getObject('/OMPLement'))
+
+        target_goal = self.sim.createDummy(0.025)
+        self.sim.setObjectPose(target_goal, goal_pose, self.sim.getObject(f'/{self.robot_name}'))
+        self.sim.setObjectColor(target_goal, 0, self.sim.colorcomponent_ambient_diffuse, [0.0, 0.0, 1.0])
+        self.sim.setObjectColor(target_goal, 0, self.sim.colorcomponent_emission, [0.6, 0.6, 0.6])
+        self.sim.setObjectAlias(target_goal, 'OMPL_target')
+
+        config_found = self.sim.callScriptFunction(
+            "find_ik_config",
+            ompl_script,
+            {
+                "robot": self.robot_name,
+                "goal": target_goal,
+                "num_attempts": num_ompl_attempts,
+            },
+        )
+
+        if not bool(config_found): return False
+
+        self.get_sim_object_params(verbose=False)
+
+        # -- get the initial 6D-pose of the hand(target):
+        hand_pos = self.sim.getObjectPosition(self.sim.getObject(':/target'), self.sim.getObject(f'/{self.robot_name}'))
+        hand_ori = self.sim.getObjectOrientation(self.sim.getObject(':/target'), self.sim.getObject(f'/{self.robot_name}'))
+        hand_6d = hand_pos + hand_ori
+
+        # -- get the goal 6D-pose from the target object goal:
+        goal_6d = self.sim.getObjectPosition(target_goal, self.sim.getObject(f'/{self.robot_name}')) + hand_6d[3:]
+
+        # -- we want to move up to some height that is based on the highest object in the scene:
+        # -- find the highest obstacle to make sure obstacles are cleared:
+        highest_object = None
+        for name, pos in self.object_positions.items():
+            if not highest_object or pos[-1] > self.object_positions[highest_object][-1]:
+                highest_object = name
+
+        # -- absolute position of hand:
+        hand_6d_abs = self.sim.getObjectPosition(self.sim.getObject(':/target'), -1)
+
+        post_hand_6d = list(hand_6d)
+        pre_goal_6d = list(goal_6d)
+
+        # -- check to see if the highest object is higher than the hand:
+        if self.object_positions[highest_object][2] > (hand_6d_abs[2] + (self.object_bb_dims[highest_object][2] * 4)):
+            highest_obj_pos = self.sim.getObjectPosition(self.sim.getObject(f"/{highest_object}"), self.sim.getObject(f'/{self.robot_name}')) + hand_6d[3:]
+            post_hand_6d[2] = highest_obj_pos[2] - (self.object_bb_dims[highest_object][2] * 4)
+            pre_goal_6d[2] = highest_obj_pos[2] - (self.object_bb_dims[highest_object][2] * 4)
+
+            keypoints = [
+                hand_6d,
+                post_hand_6d,
+                pre_goal_6d,
+                goal_6d,
+            ]
+
+            # -- use cubic spline function to create trajectory:
+            actual_grasp = self.spline_adjust_trajectory(
+                self.generate_trajectory({'trajectory': keypoints, 'time': [0.0, 0.1, 0.9, 1.0]}, ntraj=500,)
+            )
+        else:
+            pre_goal_6d[2] = post_hand_6d[2]
+
+            keypoints = [
+                hand_6d,
+                pre_goal_6d,
+                goal_6d,
+            ]
+
+            # -- use cubic spline function to create trajectory:
+            actual_grasp = self.spline_adjust_trajectory(
+                self.generate_trajectory({'trajectory': keypoints, 'time': [0.0, 0.5, 1.0]}, ntraj=500,)
+            )
+
+        for T in range(len(actual_grasp)):
+            # -- we will cap at the height for clearance:
+            # if actual_grasp[T][2] > post_hand_6d[2] * 2:
+            #     actual_grasp[T][2] = post_hand_6d[2] * 2
+            new_trajectory = self.sim.buildPose(list(actual_grasp[T][:3]), list(actual_grasp[T][3:]))
+            self.sim.setObjectPose(self.sim.getObject(f':/target'), new_trajectory, self.sim.getObject(f'/{self.robot_name}'))
+            time.sleep(0.0001)
+
+        self.sim.removeObjects([target_goal])
+
+        return True
+
     def execute(
             self,
             target_object: str,
             gripper_action: int,
-            algorithm: str = 'RRTstar',
-            num_ompl_attempts: int = 20,
+            algorithm: str = 'RRTConnect',
+            num_ompl_attempts: int = 5,
             max_compute: int = 5,
             max_simplify: int = 5,
+            len_path: int = 0,
+            method: int = 1, # 1 :- OMPL, not(1) :- spline interpolation
         ) -> bool:
+
 
         try:
             algorithm = eval(f'self.simOMPL.Algorithm.{algorithm}')
         except AttributeError:
             print(f'WARNING: path planning algorithm "{algorithm}" does not exist!')
-            algorithm = eval('self.simOMPL.Algorithm.RRTstar')
+            algorithm = eval('self.simOMPL.Algorithm.RRTConnect')
 
         # -- we will try to find configs with OMPL and find a collision-avoiding plan up to a certain number of times
         for _ in range(3 if target_object in ['table', 'worksurface'] else 1):
             # -- we will be generous and allow three attempts at finding an empty place on the table:
-            goal_pose = self.find_pose_for_ompl(target_object)
+            goal_poses = self.find_pose_for_ompl(target_object)
 
-            success = self.path_planning(target_object, goal_pose, algorithm, num_ompl_attempts, max_compute, max_simplify)
+            goal_achieved = False
+            for goal in goal_poses:
+                if method == 1:
+                    # -- use the OMPL-based path planning method:
+                    success = self.ompl_path_planning(
+                        target_object,
+                        goal,
+                        algorithm,
+                        num_ompl_attempts,
+                        max_compute,
+                        max_simplify,
+                        len_path,
+                    )
+                else:
+                    # -- use a simpler spline path planning method:
+                    success = self.spline_path_planning(goal, num_ompl_attempts)
 
-            if success: break
+                # -- check if we succeeded with this particular pose:
+                if success:
+                    goal_achieved = success
+                    break
+
+            if goal_achieved: break
 
         # -- if for whatever reason the system failed, then we just
         if not success: return False
@@ -795,8 +1010,7 @@ class Interfacer():
         # -- now that we've done obstacle avoidance to get to a good position to pick/place an object,
         #   we will now perform the rest of the action.
 
-        # NOTE: gripper_action == 1 :- pick, gripper_action == 0 :- place
-        # -- use the gripper actions to decide whether to open or close gripper (-1 and 1 respectively, otherwise 0 -- no change):
+        # NOTE: pre-grasping check below:
         if gripper_action == 1:
             # -- this means we want to pick up an object:
             start = self.sim.getObjectPosition(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObject(f'/{self.robot_name}')) + self.sim.getObjectOrientation(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObject(f'/{self.robot_name}'))
@@ -816,18 +1030,29 @@ class Interfacer():
 
         time.sleep(0.1)
 
-        obj_in_hand = self.sim.getObjectChild(self.sim.getObject(f'/{self.robot_name}/{self.robot_name}_gripper_attachPoint'), 0)
+        # NOTE: post-grasping check below:
+        # -- get the object handles for the gripper's attach point:
+        gripper_attachPoint = -1
+        children = self.sim.getObjectsInTree(self.sim.getObject(f"/{self.robot_name}"))
+        for C in children:
+            if "attachPoint" in self.sim.getObjectAlias(C):
+                gripper_attachPoint = C
+
+        if gripper_attachPoint == -1:
+            sys.exit("ERROR: robot gripper attach point was not found!")
+
+        obj_in_hand = self.sim.getObjectChild(gripper_attachPoint, 0)
         if gripper_action == 1:
             if obj_in_hand > -1:
                 # -- this means that we want to move the gripper up to remove the object from the top of the below object's surface:
                 start = self.sim.getObjectPosition(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObject(f'/{self.robot_name}')) + self.sim.getObjectOrientation(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObject(f'/{self.robot_name}'))
-                # -- we want to move up by half the height of the object:
                 end = list(start)
+                # -- we want to move up by half the height of the object:
                 end[2] += self.sim.getObjectFloatParam(obj_in_hand, self.sim.objfloatparam_objbbox_max_z)
+                # -- we also want to pick up the object and align it with the base of the robot:
 
-                traj_move_up = self.generate_trajectory(
-                    {'time': [0, 1], 'trajectory': [start, end]},
-                    ntraj=25
+                traj_move_up = self.spline_adjust_trajectory(
+                    self.generate_trajectory({'time': [0, 1], 'trajectory': [start, end]}, ntraj=25)
                 )
 
                 # -- execute the trajectory but do not change the state of the gripper:
@@ -841,16 +1066,22 @@ class Interfacer():
                 # -- this means that we have successfully placed the object (or at least there is nothing in the gripper):
                 return True
 
+        # -- if the robot fails to grip something, open the gripper back up:
+        if gripper_action == 1:
+            self.end_effector(close=0)
+
         return False
 
     def execute_utamp(
             self,
             goal_poses: list[float],
             gripper_action: int,
-            algorithm: str = 'RRTstar',
+            algorithm: str = 'RRTConnect',
             num_ompl_attempts: int = 5,
             max_compute: int = 5,
             max_simplify: int = 5,
+            len_path: int = 0,
+            method: int = 1,
         ) -> bool:
 
         # -- extract the pre-grasping/placing and post-grasping/placing poses:
@@ -864,15 +1095,27 @@ class Interfacer():
             algorithm = eval(f'self.simOMPL.Algorithm.{algorithm}')
         except AttributeError:
             print(f'WARNING: path planning algorithm "{algorithm}" does not exist!')
-            algorithm = eval('self.simOMPL.Algorithm.RRTstar')
+            algorithm = eval('self.simOMPL.Algorithm.RRTConnect')
 
         # -- we will try to find configs with OMPL and find a collision-avoiding plan up to a certain number of times
+        success = False
         if gripper_action == 0:
-            # -- if we just want to have an object placed, then we use the post-grasp given by UTAMP:
-            success = self.path_planning(None, post_grasp, algorithm, num_ompl_attempts, max_compute, max_simplify)
-        else:
-            # -- if we just want to pick an object, then we use the pre-grasp given by UTAMP:
-            success = self.path_planning(None, pre_grasp, algorithm, num_ompl_attempts, max_compute, max_simplify)
+            for _ in range(3):
+                if method == 1:
+                    # NOTE: here's how we decide on the goal pose:
+                    # -- if we want to place, then we use the *post-grasp* given by UTAMP
+                    # -- if we want to pick , then we use the *pre-grasp* given by UTAMP
+                    success = self.ompl_path_planning(
+                        None,
+                        (post_grasp if gripper_action == 0 else pre_grasp),
+                        algorithm,
+                        num_ompl_attempts,
+                        max_compute,
+                        max_simplify,
+                        len_path
+                    )
+                else:
+                    success = self.spline_path_planning((post_grasp if gripper_action == 0 else pre_grasp), num_ompl_attempts)
 
         # -- if for whatever reason the system failed, then we just
         if not success: return False
@@ -887,7 +1130,7 @@ class Interfacer():
 
             traj_move_down = self.generate_trajectory(
                 {'time': [0, 1], 'trajectory': [start, end]},
-                ntraj=25
+                ntraj=50
             )
 
             self.execute_trajectory(traj_move_down)
@@ -896,7 +1139,17 @@ class Interfacer():
 
         time.sleep(0.01)
 
-        obj_in_hand = self.sim.getObjectChild(self.sim.getObject(f'/{self.robot_name}/{self.robot_name}_gripper_attachPoint'), 0)
+        # -- get the object handles for the gripper's attach point:
+        gripper_attachPoint = -1
+        children = self.sim.getObjectsInTree(self.sim.getObject(f"/{self.robot_name}"))
+        for C in children:
+            if "attachPoint" in self.sim.getObjectAlias(C):
+                gripper_attachPoint = C
+
+        if gripper_attachPoint == -1:
+            sys.exit("ERROR: robot gripper attach point was not found!")
+
+        obj_in_hand = self.sim.getObjectChild(gripper_attachPoint, 0)
         if obj_in_hand > -1:
             # -- this means that we want to move the gripper up to remove the object from the top of the below object's surface:
             start = self.sim.getObjectPosition(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObject(f'/{self.robot_name}')) + self.sim.getObjectOrientation(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObject(f'/{self.robot_name}'))
@@ -927,7 +1180,7 @@ class Interfacer():
 
     def generate_trajectory(
             self,
-            keypoints: list[float],
+            keypoints: dict,
             ntraj: int = 150,
         ):
 
@@ -1007,9 +1260,11 @@ class UTAMP:
             verbose: bool = False,
             pick_from_top: bool = True,
             num_ompl_attempts: int = 3,
-            algorithm: str = 'RRTstar',
+            algorithm: str = 'RRTConnect',
             max_compute: int = 5,
             max_simplify: int = 5,
+            path_plan_method: int = 1,
+            len_path: int = 0,
         ) -> bool:
 
         cnx, cursor = self.cnx, self.cursor
@@ -1132,6 +1387,8 @@ class UTAMP:
                     num_ompl_attempts,
                     max_compute,
                     max_simplify,
+                    len_path,
+                    path_plan_method,
                 )
 
                 status = 0
@@ -1209,11 +1466,13 @@ def create_domain_file(
                     for O in objects_in_sim:
                         # -- check if an object in the scene has been classified as special PDDL type:
                         object_type = 'object'
-                        for T in typing:
-                            if O in typing[T]:
-                                object_type = T
+                        if typing:
+                            for T in typing:
+                                if O in typing[T]:
+                                    pddl_file.write(f'\t\t{O} - {T}\n')
 
-                        pddl_file.write(f'\t\t{O} - {object_type}\n')
+                        else:
+                            pddl_file.write(f'\t\t{O} - {object_type}\n')
 
                 elif '(domain' in L:
                     pddl_file.write(f'(define (domain {domain_name})')
@@ -1258,12 +1517,14 @@ def create_problem_file(
                 pddl_file.write('\t; hand/end-effector contains some type of object:\n')
 
             pddl_file.write('\t' + '(in hand ' + str(in_object_layout['hand']) +')' + '\n')
+            pddl_file.write('\t' + '(under hand ' + str(under_object_layout['hand']) +')' + '\n')
         else:
             # -- hand will be empty by default:
             pddl_file.write('\t; hand/end-effector must be empty (i.e. contains "air"):\n')
             pddl_file.write('\t' + '(in hand air)' + '\n')
 
-        pddl_file.write('\t' + '(not (is-mobile))' + '\n')
+        if 'olp' in domain_name:
+            pddl_file.write('\t' + '(not (is-mobile))' + '\n')
 
         # -- identifying all objects that are being referenced as preconditions:
         all_objects, on_objects = set(), set()
@@ -1367,9 +1628,10 @@ def create_problem_file(
 
         pddl_file.write('(:goal (and\n')
 
-    # -- hand must be empty after executing action to free it for next macro-PO:
-        pddl_file.write('\t; hand/end-effector must be also be empty after execution (i.e. contains "air"):\n')
-        pddl_file.write('\t(in hand air)\n\n')
+        # -- hand must be empty after executing action to free it for next macro-PO:
+        if "(in hand air)" not in effects:
+            pddl_file.write('\t; hand/end-effector must be also be empty after execution (i.e. contains "air"):\n')
+            pddl_file.write('\t(in hand air)\n\n')
 
         pddl_file.write('\t; effect predicates obtained directly from macro PO:\n')
 
@@ -1459,7 +1721,7 @@ def create_problem_file(
 def find_plan(
         domain_file: str,
         problem_file: str,
-        output_plan_file:str = None,
+        plan_file: str = None,
         verbose: bool = False,
     ) -> str:
 
@@ -1474,14 +1736,14 @@ def find_plan(
         # NOTE: more information on aliases for Fast-Downward can be found here: https://www.fast-downward.org/IpcPlanners
         # -- you can use a different algorithm for more optimal or satisficing results:
         method = configs[algorithm][heuristic]
-        command = ['python3', str(path_to_planners[planner_to_use]), '--plan-file', output_plan_file, domain_file, problem_file, '--search', method]
+
+        command = ['python3', str(path_to_planners[planner_to_use])]
+        if plan_file:
+            command.extend(['--plan-file', plan_file])
+        command.extend([domain_file, problem_file, '--search', method])
 
     elif planner_to_use == 'PDDL4J':
         command = ['java', '-jar', str(path_to_planners[planner_to_use]),  '-o', domain_file, '-f', problem_file]
-
-    else:
-        return None
-    # endif
 
     if verbose:
         print(f'run this command: {str(" ".join(command))}')
@@ -1489,20 +1751,22 @@ def find_plan(
     try:
         planner_output = subprocess.check_output(command)
     except subprocess.CalledProcessError as e:
-        print(f"  -- [FOON-TAMP] : Planner error (planner:  {planner_to_use}, error code: {e.returncode})!")
-        # print(f'     -- Error code: {e.returncode} -- {e.output}')
-        pass
-    # endtry
+        print(f"  -- [FOON-TAMP] : Planner error (planner:  {planner_to_use}, error code: {e.returncode})!\n\t-- Actual message: {e.output}")
 
     return planner_output
 # enddef
 
 
-def solve(output: str) -> bool:
+def solve(output: str, verbose:bool = False) -> tuple[bool, str]:
     # -- using planner-specific string checking to see if a plan was found:
     global planner_to_use
+    if verbose:
+        print(str(output))
     if planner_to_use == 'fast-downward':
-        return True if 'Solution found.' in str(output) else False
+        time_taken = None
+        if "Total time: " in str(output):
+            time_taken = str(output).split("Total time: ")[1].split("s")[0]
+        return bool('Solution found.' in str(output)), (float(time_taken) if time_taken else None)
     elif planner_to_use == 'PDDL4J':
         # TODO: implement integration with other planners such as PDDL4J
         return False

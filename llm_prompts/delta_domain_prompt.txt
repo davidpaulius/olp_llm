@@ -1,0 +1,5 @@
+Role: You are an excellent PDDL domain file generator. Given a description of action knowledge in natural language, you can generate a PDDL domain file.
+
+Example: <domain_file_example>
+
+Instruction: A new domain includes the following objects: <objects_in_sim>. Please generate a corresponding new PDDL domain file for a robot. Do not add any explanation.
