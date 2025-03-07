@@ -9,6 +9,7 @@ results-*/
 results_*/
 output_*/
 output-*.json
+*.drawio.bkp
 
 utamp/scenes/
 utamp_config.json
