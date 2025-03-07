@@ -423,6 +423,7 @@ def llm_summarize_FOON(
 
     return task_description, list(filter(None, task_steps.split('\n')))
 
+
 def generate_from_FOON(
         openai_obj: Type[OpenAIInterfacer],
         query: str,
@@ -536,6 +537,8 @@ def generate_from_FOON(
 
     for x in top_k_foons:
         stage1b_prompt = f"{stage1b_prompt}\n\nPrototype Task #{x}:\n{encoded_FOONs[x-1]['language_plan']}"
+        if verbose:
+            print(f"Prototype Task #{x}:\n{encoded_FOONs[x-1]['language_plan']}\n")
 
     interaction.extend([{"role": "user", "content": stage1b_prompt}, ])
 
@@ -559,7 +562,7 @@ def generate_from_FOON(
 
     # -- get a list of instructions that satisfies the given prompt:
     stage2a_prompt = (
-        f"Generate a concise plan using the prototype as inspiration for the task: {query}."
+        f"Generate a concise plan using the prototype as inspiration for the task: {query}{'.' if '.' not in query else ''}"
         " Follow all guidelines. "
         " Give evidence to support your plan logic."
     )
@@ -1191,6 +1194,8 @@ def olp_to_FOON(
 
     geometric_states = ['in', 'on', 'under', 'contains', 'left of', 'right of', 'above', 'below']
 
+    temp_objects = []
+
     for obj in used_objects:
 
         if obj in ['table', 'surface']:
@@ -1211,7 +1216,10 @@ def olp_to_FOON(
 
         for state_type in ['preconditions', 'effects']:
             # -- create a FOON object node for which we will then add attributes:
-            new_object = fga.FOON.Object(objectLabel=obj)
+            new_object = fga.FOON.Object(
+                objectID=used_objects.index(obj),
+                objectLabel=obj,
+            )
 
             for state in object_state_changes[state_type]:
                 # -- check if state effect involves another object in step
@@ -1258,8 +1266,10 @@ def olp_to_FOON(
             # -- add the node to the functional unit:
             functionalUnit.addObjectNode(
                 objectNode=new_object,
-                is_input=(True if 'precondition' in state_type.lower() else False)
+                is_input=(True if 'precondition' in state_type.lower() else False),
             )
+
+            temp_objects.append(new_object)
 
     # -- make a new motion node and add it to the functional unit:
     newMotion = fga.FOON.Motion(motionID=None, motionLabel=action)

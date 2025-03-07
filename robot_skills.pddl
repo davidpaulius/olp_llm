@@ -98,32 +98,32 @@
     (:action pour
         :parameters (?obj - object ?source - object ?target - object)
         :precondition (and
+            ; NOTE: specifying cases for mobile and non-mobile robots:
             (or
-                (at ?target robot)
-                (not (is-mobile))
+                (at ?target robot) ; the robot is near the target container
+                (not (is-mobile)) ; the robot is not mobile
             )
 
             ; source container (which is in the hand) initially contains some kind of object:
-            (under ?source air)
-            (in ?source ?obj)
-            (on ?source ?obj)
+            (under ?source air) ; there is nothing below the source container
+            (in ?source ?obj) ; the source container contains some object
+            (on ?source ?obj) ; the source container contains an object that is "above" it
+            (under ?obj ?source) ; the object is "on" the source container
 
-            (under ?obj ?source)
-            (in hand ?source)
+            (on ?target air) ; target container should be collision-free (not caring about what is inside)
 
-            ; target container should be collision-free (not caring about what is inside):
-            (on ?target air)
+            (in hand ?source) ; the source container is in the robot's gripper
         )
         :effect (and
-            (in ?source air)
-            (in ?target ?obj)
-            (under ?obj ?target)
+            (in ?source air) ; nothing is inside of the source container
+            (in ?target ?obj) ; the target container now has the object that was originally in source
+            (under ?obj ?target) ; the target container contains an object that is "above" it
 
-            (not (in ?source ?obj))
-            (not (on ?source ?obj))
+            (not (in ?source ?obj)) ; the source container no longer contains some object
+            (not (on ?source ?obj)) ; the source container no longer contains some object
+            (not (under ?obj ?source)) ; the object is no longer "on" the source container
 
-            (not (in ?target air))
-            (not (under ?obj ?source))
+            (not (in ?target air)) ; the target container is no longer empty
         )
     )
 
