@@ -3,17 +3,13 @@ import os
 import time
 import argparse
 import math
-import subprocess
 import numpy as np
 import json
 import mysql.connector as sql
 
-from pathlib import Path
-from tqdm import tqdm
 from random import choice
 from typing import Type
 from scipy.interpolate import CubicSpline
-from scipy.stats import norm
 
 try:
     from coppeliasim_zmqremoteapi_client import RemoteAPIClient
@@ -24,30 +20,6 @@ except ImportError:
 
 
 # pip3 install numpy scipy openai tiktoken scikit-learn tqdm pandas coppeliasim-zmqremoteapi-client nltk mysql-connector
-
-# NOTE: make sure you define the path to where the planners are located on your machine:
-# -- paths to the different planners on my PC:
-path_to_planners = {}
-if os.name == 'nt':
-    # -- this is the path to the planners on the Windows side:
-    path_to_planners['PDDL4J'] = 'D:/PDDL4J/pddl4j-3.8.3.jar'
-    path_to_planners['fast-downward'] = 'C:/Users/david/fast-downward-23.06/fast-downward.py'
-else:
-    # -- this is the path to the planners on the Ubuntu side:
-    path_to_planners['fast-downward'] = '/media/master_oogway/ESD-ISO/ICRA-25/fast-downward-22.12/fast-downward.py'
-
-planner_to_use = 'fast-downward'
-
-# NOTE: algorithm is a key in the configs dictionary, while
-#   heuristic is an index for the list of configs per algorithm:
-configs = {
-    'astar': ['astar(lmcut())', 'astar(ff())'],
-    'eager': ['eager(lmcut())', 'eager(ff())'],
-    'lazy': ['lazy(lmcut())', 'lazy(ff())']
-}
-algorithm = 'astar'
-heuristic = 0
-
 
 class Interfacer():
     def __init__(
@@ -68,9 +40,8 @@ class Interfacer():
             # -- just use the default port number:
             self.client = RemoteAPIClient(host='localhost')
 
-
         self.sim = self.client.require('sim')
-        status = self.load_scenario(scene_file_name)
+        status = self.load_scene(scene_file_name)
         if not bool(status):
             print("ERROR: something went wrong with scene load function!")
 
@@ -78,7 +49,7 @@ class Interfacer():
         self.simIK = self.client.require('simIK')
         self.simOMPL = self.client.require('simOMPL')
 
-        self.objects_in_sim = self.get_sim_objects(self.sim)
+        self.objects_in_sim = self.get_sim_objects()
 
         # -- self-contained dictionaries containing object properties:
         self.object_positions, self.object_orientations, self.object_bb_dims = {}, {}, {}
@@ -87,42 +58,72 @@ class Interfacer():
 
         self.start_time = time.time()
 
-    def get_elapsed_time(self):
-        return float(time.time() - self.start_time)
-
-    def sim_print(self, string: str):
-        self.sim.addLog(self.sim.getInt32Param(self.sim.intparam_verbosity), f'[UTAMP-driver] : {string}')
-
-    def reset(self):
-        self.objects_in_sim = self.get_sim_objects(self.sim)
-        self.start_time = time.time()
-
-    def pause(self):
-        self.sim.pauseSimulation()
-        while self.sim.getSimulationState() != self.sim.simulation_paused:
-            time.sleep(0.001)
-
-    def start(self):
-        self.sim.startSimulation()
-        while self.sim.getSimulationState() != self.sim.simulation_advancing_running:
-            time.sleep(0.001)
-
-    def stop(self):
-        self.sim.stopSimulation()
-        while self.sim.getSimulationState() != self.sim.simulation_stopped:
-            time.sleep(0.001)
-
-    def load_scenario(self, scene_file_name: str) -> int:
+    def load_scene(self, scene_file_name: str) -> int:
         # -- if any simulation is currently running, stop it before closing the scene:
-        self.stop(); self.sim.closeScene()
+        self.sim_stop(); self.sim.closeScene()
 
         # -- finally, get the full path to the scene file and load it:
         complete_scene_path = os.path.abspath(scene_file_name)
-        self.sim.addLog(self.sim.getInt32Param(self.sim.intparam_verbosity), '[UTAMP-driver] : Loading scene "' + complete_scene_path + '" into CoppeliaSim...')
+        self.sim.addLog(self.sim.verbosity_default, '[UTAMP-driver] : Loading scene "' + complete_scene_path + '" into CoppeliaSim...')
 
         if not bool(self.sim.loadScene(complete_scene_path)):
             return False
 
+        # -- reset camera to some default pose that is centered on the robot:
+        self.sim_reset_camera()
+
+        self.sim.setInt32Param(self.sim.intparam_idle_fps, 0)
+
+        # -- make sure that the gripper is opened (i.e., set the signal to value of 1):
+        self.sim.setInt32Signal('close_gripper', 0)
+
+        return True
+
+    ############################################################
+    # NOTE: simulation control functions:
+    ############################################################
+
+    def sim_start(self):
+        self.sim_print(string='Starting simulation...')
+
+        self.sim.startSimulation()
+        while self.sim.getSimulationState() != self.sim.simulation_advancing_running:
+            time.sleep(0.001)
+
+    def sim_stop(self):
+        self.sim_print(string='Stopping simulation...')
+
+        self.sim.stopSimulation()
+        while self.sim.getSimulationState() != self.sim.simulation_stopped:
+            time.sleep(0.001)
+
+    def sim_pause(self):
+        self.sim_print(string='Pausing simulation...')
+
+        self.sim.pauseSimulation()
+        while self.sim.getSimulationState() != self.sim.simulation_paused:
+            time.sleep(0.001)
+
+    def sim_reset(self):
+        self.objects_in_sim = self.get_sim_objects()
+        self.start_time = time.time()
+
+    def sim_print(self, string: str, print_type: str = 'default'):
+        # NOTE: print_type can be of the following: ['default', 'warnings', 'errors']
+        if print_type not in ['default', 'warnings', 'errors']:
+            # -- just default to "default" if anything is wrong:
+            print_type = 'default'
+
+        self.sim.addLog(eval(f"self.sim.verbosity_{print_type}"), f'[UTAMP-driver] : {string}')
+
+    def get_elapsed_time(self):
+        return float(time.time() - self.start_time)
+
+    ############################################################
+    # NOTE: camera visualization stuff:
+    ############################################################
+
+    def sim_reset_camera(self):
         ideal_positions = [
             [-2.10, 0, 1.39],
             [-1.7, 0, 2.25],
@@ -136,39 +137,91 @@ class Interfacer():
         self.sim.setObjectPosition(self.sim.getObject('/DefaultCamera'), -1, ideal_positions[-1])
         self.sim.setObjectOrientation(self.sim.getObject('/DefaultCamera'), -1, ideal_orientations[-1])
 
-        self.sim.setInt32Param(self.sim.intparam_idle_fps, 0)
+    def sim_take_snapshot(self, file_name: str, render_mode: str = 'opengl'):
+        # NOTE: a lot of this code was pulled directly from the "Screenshot tool" provided by CoppeliaSim:
+        sim = self.sim
+        cam = sim.getObject('/DefaultCamera')
+        pose = sim.getObjectPose(cam)
 
-        # -- make sure that the gripper is opened (i.e., set the signal to value of 1):
-        self.sim.setInt32Signal('close_gripper', 0)
+        config = {
+            'res': [1500, 1100],
+            'renderMode': render_mode,
+            'povray': {
+                'available': False,
+                'focalBlur': True,
+                'focalDistance': 2,
+                'aperture': 0.15,
+                'blurSamples': 10,
+            },
+            'nearClipping': 0.01,
+            'farClipping': 200,
+            'viewAngle': 60 * math.pi / 180
+        }
 
-        return True
+        visSens = sim.createVisionSensor(
+            3,
+            [config['res'][0], config['res'][1], 0, 0],
+            [config['nearClipping'], config['farClipping'], config['viewAngle'], 0.1, 0.1, 0.1, 0, 0, 0, 0, 0]
+        )
+        sim.setObjectPose(visSens, pose)
+        sim.setObjectInt32Param(
+            visSens,
+            sim.visionintparam_pov_focal_blur,
+            config['povray']['focalBlur'] and 1 or 0
+        )
+        sim.setObjectFloatParam(
+            visSens,
+            sim.visionfloatparam_pov_blur_distance,
+            config['povray']['focalDistance']
+        )
+        sim.setObjectFloatParam(visSens, sim.visionfloatparam_pov_aperture, config['povray']['aperture'])
+        sim.setObjectInt32Param(visSens, sim.visionintparam_pov_blur_sampled, config['povray']['blurSamples'])
+        if config['renderMode'] == 'opengl':
+            sim.setObjectInt32Param(visSens, sim.visionintparam_render_mode, 0)
+        elif config['renderMode'] == 'opengl3':
+            sim.setObjectInt32Param(visSens, sim.visionintparam_render_mode, 7)
 
-    def get_sim_objects(self, sim) -> list[str]:
+        savedVisibilityMask = sim.getObjectInt32Param(cam, sim.objintparam_visibility_layer)
+        sim.setObjectInt32Param(cam, sim.objintparam_visibility_layer, 0)
+        newAttr = sim.displayattribute_renderpass + sim.displayattribute_forvisionsensor + sim.displayattribute_ignorerenderableflag
+        sim.setObjectInt32Param(visSens, sim.visionintparam_rendering_attributes, newAttr)
+        sim.handleVisionSensor(visSens)
+        sim.setObjectInt32Param(cam, sim.objintparam_visibility_layer, savedVisibilityMask)
+
+        image, res = sim.getVisionSensorImg(visSens, 0, 0, [0, 0], [0, 0])
+        sim.removeObjects([visSens])
+        sim.saveImage(image, res, 0, file_name, -1)
+
+    ############################################################
+    # NOTE: getting objects in the scene:
+    ############################################################
+
+    def get_sim_objects(self) -> list[str]:
         # NOTE: this function should be run at the very beginning of robot execution:
         objects_list = []
 
         obj_index = 0
         while True:
-            obj_handle = sim.getObjects(obj_index, sim.handle_all)
+            obj_handle = self.sim.getObjects(obj_index, self.sim.handle_all)
             if obj_handle == -1:
                 break
 
             obj_index += 1
 
-            # -- check if the object has no parent:
-            if sim.getObjectParent(obj_handle) != -1:
+            # -- check if the object has no parent (because we only want to consider base objects):
+            if self.sim.getObjectParent(obj_handle) != -1:
                 continue
 
-            # -- check if the object is non-static and respondable:
-            if bool(sim.getObjectInt32Param(obj_handle, sim.shapeintparam_static)) and not bool(sim.getObjectInt32Param(obj_handle, sim.shapeintparam_respondable)):
+            # -- we need to make sure that the object is both non-static/dynamic and respondable:
+            if bool(self.sim.getObjectInt32Param(obj_handle, self.sim.shapeintparam_static)) and not bool(self.sim.getObjectInt32Param(obj_handle, self.sim.shapeintparam_respondable)):
                 continue
 
             # -- check if the object is not a valid "shape" type object (to exclude anything like the camera, dummy objects, etc.):
-            if sim.getObjectType(obj_handle) != sim.object_shape_type:
+            if self.sim.getObjectType(obj_handle) != self.sim.object_shape_type:
                 continue
 
             # -- add the name of the object to the list of all objects of interest in the scene:
-            obj_name = sim.getObjectAlias(obj_handle)
+            obj_name = self.sim.getObjectAlias(obj_handle)
             if self.robot_name == obj_name:
                 continue
 
@@ -220,7 +273,47 @@ class Interfacer():
 
         return self.object_positions, self.object_orientations, self.object_bb_dims
 
-    def is_collision(
+    def find_empty_spots(self) -> list[str]:
+        # NOTE: the purpose of this function is to find empty places on the table for place actions:
+
+        # -- get the current state and parameters of objects in the scene:
+        _ = self.get_sim_object_params(verbose=False)
+
+        table, empty_spots = [], []
+
+        while True:
+            try:
+                dummy = self.sim.getObject('/Dummy', {'index': len(table)})
+            except Exception:
+                break
+
+            is_empty = True
+            for obj in self.objects_in_sim:
+                if self.check_if_on_top(
+                    obj_above=obj,
+                    obj_below=dummy,
+                    check_collision=False,
+                    verbose=False,
+                ):
+                    is_empty = False
+                    break
+
+            if is_empty:
+                # print(f'/Dummy[{len(table)}] has nothing on it')
+                empty_spots.append({
+                    'index': len(table),
+                    'handle': dummy
+                })
+
+            table.append(dummy)
+
+        return empty_spots
+
+    ############################################################
+    # NOTE: object to object checking (for perception/sensing):
+    ############################################################
+
+    def check_if_contact(
             self,
             obj1: str,
             obj2: str,
@@ -235,7 +328,7 @@ class Interfacer():
 
         return True
 
-    def is_on_object(
+    def check_if_on_top(
             self,
             obj_above: str,
             obj_below: str,
@@ -306,13 +399,13 @@ class Interfacer():
             # -- if obj1 is actually below obj2, then just continue:
             is_top_bb_z = False
 
-        elif (obj1_min_z - obj2_max_z) > 0.001:
+        elif (obj1_min_z - obj2_max_z) > 0.01:
             is_top_bb_z = False
 
         is_touching = True
         if check_collision:
             # -- checking if there is any contact between the object pair:
-            is_touching = self.is_collision(obj_above, obj_below)
+            is_touching = self.check_if_contact(obj_above, obj_below)
 
         if verbose:
             print(f"{obj_above} is within x-bb {obj_below}? -> {is_within_bb_x}")
@@ -322,61 +415,46 @@ class Interfacer():
 
         return bool(is_within_bb_x and is_within_bb_y and is_top_bb_z and is_touching)
 
-    def take_snapshot(self, file_name: str, render_mode: str = 'opengl'):
-        # NOTE: a lot of this code was pulled directly from the "Screenshot tool" provided by CoppeliaSim:
-        sim = self.sim
-        cam = sim.getObject('/DefaultCamera')
-        pose = sim.getObjectPose(cam)
+    def get_object_in_hand(self, skip_proximity_sensor:bool=False):
+        # NOTE: this function searches for the gripper's attach point and proximity sensor objects to determine
+        #       whether there is an object in the robot's gripper or not.
 
-        config = {
-            'res': [1500, 1100],
-            'renderMode': render_mode,
-            'povray': {
-                'available': False,
-                'focalBlur': True,
-                'focalDistance': 2,
-                'aperture': 0.15,
-                'blurSamples': 10,
-            },
-            'nearClipping': 0.01,
-            'farClipping': 200,
-            'viewAngle': 60 * math.pi / 180
-        }
+        # -- search the robot's collection tree for the sensor and attach point handles:
+        gripper_attachPoint, gripper_proximitySensor = -1, -1
+        for C in self.sim.getObjectsInTree(self.sim.getObject(f"/{self.robot_name}")):
+            if "attachPoint" in self.sim.getObjectAlias(C):
+                gripper_attachPoint = C
+            elif "attachProxSensor" in self.sim.getObjectAlias(C):
+                gripper_proximitySensor = C
 
-        visSens = sim.createVisionSensor(
-            3,
-            [config['res'][0], config['res'][1], 0, 0],
-            [config['nearClipping'], config['farClipping'], config['viewAngle'], 0.1, 0.1, 0.1, 0, 0, 0, 0, 0]
-        )
-        sim.setObjectPose(visSens, pose)
-        sim.setObjectInt32Param(
-            visSens,
-            sim.visionintparam_pov_focal_blur,
-            config['povray']['focalBlur'] and 1 or 0
-        )
-        sim.setObjectFloatParam(
-            visSens,
-            sim.visionfloatparam_pov_blur_distance,
-            config['povray']['focalDistance']
-        )
-        sim.setObjectFloatParam(visSens, sim.visionfloatparam_pov_aperture, config['povray']['aperture'])
-        sim.setObjectInt32Param(visSens, sim.visionintparam_pov_blur_sampled, config['povray']['blurSamples'])
-        if config['renderMode'] == 'opengl':
-            sim.setObjectInt32Param(visSens, sim.visionintparam_render_mode, 0)
-        elif config['renderMode'] == 'opengl3':
-            sim.setObjectInt32Param(visSens, sim.visionintparam_render_mode, 7)
+        if gripper_attachPoint == -1:
+            sys.exit("ERROR: robot gripper attach point was not found!")
+            self.sim_print("ERROR: robot gripper attach point was not found!", print_type='error')
 
-        savedVisibilityMask = sim.getObjectInt32Param(cam, sim.objintparam_visibility_layer)
-        sim.setObjectInt32Param(cam, sim.objintparam_visibility_layer, 0)
-        newAttr = sim.displayattribute_renderpass + sim.displayattribute_forvisionsensor + sim.displayattribute_ignorerenderableflag
-        sim.setObjectInt32Param(visSens, sim.visionintparam_rendering_attributes, newAttr)
-        sim.handleVisionSensor(visSens)
-        sim.setObjectInt32Param(cam, sim.objintparam_visibility_layer, savedVisibilityMask)
+        elif gripper_proximitySensor == -1:
+            sys.exit("ERROR: robot gripper proximity sensor was not found!")
+            self.sim_print("ERROR: robot gripper proximity sensor was not found!", print_type='error')
 
-        image, res = sim.getVisionSensorImg(visSens, 0, 0, [0, 0], [0, 0])
-        sim.removeObjects([visSens])
-        sim.saveImage(image, res, 0, file_name, -1)
+        # NOTE: the object that is in its gripper should be the child of the attach point:
+        obj_in_hand = self.sim.getObjectChild(gripper_attachPoint, 0)
 
+        if obj_in_hand == -1: return -1
+
+        # -- check if an object is within the range of the end-effector's proximity sensor:
+        is_in_hand, _, _, _, _ = self.sim.checkProximitySensor(gripper_proximitySensor, obj_in_hand)
+
+        if not bool(is_in_hand):
+            print("WARNING: there's an object attached but the proximity sensor does not pick it up?")
+            self.sim_print("WARNING: there's an object attached but the proximity sensor does not pick it up?", print_type='warning')
+
+        if skip_proximity_sensor: is_in_hand = True
+
+        # -- now that we found the gripper's attach point, we return its child, which should be the object in it:
+        return obj_in_hand if bool(is_in_hand) else -1
+
+    def check_if_object_in_hand(self):
+        # -- this function merely checks if there is something in the hand or not:
+        return self.get_object_in_hand() != -1
 
     def perform_sensing(
             self,
@@ -502,28 +580,11 @@ class Interfacer():
             # NOTE: we will also check from perception whether the hand is empty or not:
             is_grasping = False
 
-            # -- get the object handles for the gripper's attach point and proximity sensor:
-            gripper_attachPoint, gripper_sensor = -1, -1
-            children = sim.getObjectsInTree(sim.getObject(f"/{self.robot_name}"))
-            for C in children:
-                if "attachProxSensor" in sim.getObjectAlias(C):
-                    gripper_sensor = C
-                elif "attachPoint" in sim.getObjectAlias(C):
-                    gripper_attachPoint = C
-
-            if gripper_attachPoint == -1:
-                sys.exit("ERROR: robot gripper attach point was not found!")
-
             for obj in goal_objects:
-                obj_handle = sim.getObject(f'/{obj}')
-
-                # -- check if an object is within the range of the end-effector's proximity sensor:
-                is_in_hand, _, _, _, _ = sim.checkProximitySensor(gripper_sensor, obj_handle)
-
                 # -- check if there is an object "attached" to the gripper:
-                obj_in_hand = self.sim.getObjectChild(gripper_attachPoint, 0)
+                obj_in_hand = self.get_object_in_hand()
 
-                if bool(is_in_hand) and obj_in_hand > -1:
+                if self.check_if_object_in_hand():
                     is_grasping = True
 
                     try:
@@ -581,7 +642,7 @@ class Interfacer():
                     if obj1 == obj2:
                         continue
 
-                    if self.is_on_object(obj1, obj2, check_collision=check_collision):
+                    if self.check_if_on_top(obj1, obj2, check_collision=check_collision):
                         if obj2 in on_object_layout:
                             # -- this means that there is also another object that was found to be on top of this object:
                             if on_object_layout[obj2] in object_positions:
@@ -647,44 +708,19 @@ class Interfacer():
 
         return sensing_for_pddl()
 
-    def find_empty_spots(self) -> list[str]:
-        # NOTE: the purpose of this function is to find empty places on the table for place actions:
+    ############################################################
+    # NOTE: OMPL-related planning:
+    ############################################################
 
-        # -- get the current state and parameters of objects in the scene:
-        _ = self.get_sim_object_params(verbose=False)
+    def ompl_find_pose(
+            self,
+            target_object: str,
+            affordance: str = 'pick-top',
+            verbose: bool = True,
+            skip_errors: bool = True,
+        ) -> list[float]:
 
-        table, empty_spots = [], []
-
-        while True:
-            try:
-                dummy = self.sim.getObject('/Dummy', {'index': len(table)})
-            except Exception:
-                break
-
-            is_empty = True
-            for obj in self.objects_in_sim:
-                if self.is_on_object(
-                    obj_above=obj,
-                    obj_below=dummy,
-                    check_collision=False,
-                    verbose=False,
-                ):
-                    is_empty = False
-                    break
-
-            if is_empty:
-                # print(f'/Dummy[{len(table)}] has nothing on it')
-                empty_spots.append({
-                    'index': len(table),
-                    'handle': dummy
-                })
-
-            table.append(dummy)
-
-        return empty_spots
-
-    def find_pose_for_ompl(self, target_object: str, verbose: bool = False) -> list[float]:
-
+        # -- get robot and end-effector target handles:
         robot = self.sim.getObject(f"/{self.robot_name}")
         target = self.sim.getObject(f"/{self.robot_name}/target")
 
@@ -693,105 +729,197 @@ class Interfacer():
         if target_object in ["table", "worksurface"]:
             empty_spot = choice(self.find_empty_spots())
             index, target_object = empty_spot['index'], self.sim.getObjectAlias(empty_spot['handle'])
-            self.sim.addLog(self.sim.getInt32Param(self.sim.intparam_verbosity), f"table grounding: found empty spot: /{target_object}[{empty_spot['index']}]")
+            self.sim.addLog(self.sim.verbosity_default, f"table grounding: found empty spot: /{target_object}[{empty_spot['index']}]")
             if verbose:
                 print(f"table grounding: found empty spot: /{target_object}[{empty_spot['index']}]")
+                self.sim_print(f"table grounding: found empty spot: /{target_object}[{empty_spot['index']}]")
 
+        # -- get the pose of the target object:
         goal = self.sim.getObject(f"/{target_object}", {"index": index})
+
+        fingertip_handle = self.sim.getObject(f'/{self.robot_name}_leftfinger_respondable', {"noError": True})
+
+        # -- this will tell us if there is an object in the gripper (obj_in_hand != -1):
+        obj_in_hand = self.get_object_in_hand()
 
         candidate_goal_poses = []
 
-        for rotate in [0.0, (math.pi/2), (math.pi), (math.pi*2)]:
-            # -- Find a collision-free config that matches a specific pose:
-            goal_pose = self.sim.getObjectPose(goal, robot)
+        if "pick" in affordance:
+            # -- we are considering different end-effector orientations for picking an object:
+            if obj_in_hand == -1:
 
-            # -- get the object handles for the gripper's attach point:
-            gripper_attachPoint = -1
-            children = self.sim.getObjectsInTree(self.sim.getObject(f"/{self.robot_name}"))
-            for C in children:
-                if "attachPoint" in self.sim.getObjectAlias(C):
-                    gripper_attachPoint = C
+                for angular_offset in [0.0, (math.pi/2), math.pi, (3*math.pi/2), (math.pi*2)]:
+                    # -- first, let's get the position set:
+                    goal_pose = self.sim.getObjectPose(goal, robot)
 
-            if gripper_attachPoint == -1:
-                sys.exit("ERROR: robot gripper attach point was not found!")
+                    # NOTE: if there is an object in hand, we are assuming that we want to place it somewhere;
+                    #       else, we are assuming that we want to pick up an object instead.
 
-            # -- determine the height based on whether there is an object in hand or not:
-            obj_in_hand = self.sim.getObjectChild(gripper_attachPoint, 0)
+                    if affordance == 'pick-side':
+                        goal_pose[0] -= self.sim.getObjectFloatParam(goal, self.sim.objfloatparam_objbbox_max_x) * 0.5
+
+                    if affordance == 'pick-top':
+                        # -- move the target down by half of the finger so that it is positioned in a more "stable" position:
+                        goal_pose[2] += self.sim.getObjectFloatParam(goal, self.sim.objfloatparam_objbbox_max_z) \
+                            - (self.sim.getObjectFloatParam(fingertip_handle, self.sim.objfloatparam_objbbox_max_z)) if fingertip_handle != -1 else 0.0
+
+                    for rotate in [0.0, math.pi]:
+                        # -- now we will consider the orientation of the gripper depending on the task:
+                        goal_pose_copy = list(goal_pose)
+
+                        orientation = self.sim.getObjectOrientation(goal, robot)
+                        if 'side' in affordance:
+                            goal_pose_copy[3:] = self.sim.buildPose(goal_pose[:3], [orientation[0], (math.pi/2) + angular_offset, orientation[2] + rotate])[3:]
+                        elif 'top' in affordance:
+                            goal_pose_copy[3:] = self.sim.buildPose(goal_pose[:3], [-(math.pi) + rotate, orientation[1], orientation[2] + angular_offset])[3:]
+
+                        candidate_goal_poses.append(goal_pose_copy)
+
+            elif not skip_errors: raise Exception("ERROR: picking with an object in hand?")
+
+        elif "place" in affordance:
             if obj_in_hand != -1:
-                # -- first, we find a spot that sits RIGHT ON TOP of the surface...
-                goal_pose[2] += self.sim.getObjectFloatParam(goal, self.sim.objfloatparam_objbbox_max_z)
-                # ... then we will find a spot that considers the height of the object:
-                goal_pose[2] += self.sim.getObjectFloatParam(obj_in_hand, self.sim.objfloatparam_objbbox_max_z) * (1.5 if target_object not in ["table", "worksurface"] else 1.25)
+                # -- we are considering different end-effector orientations for picking an object:
+                for angular_offset in [0.0, (math.pi/2), (math.pi), (math.pi*2)]:
+                    # -- sample another empty spot:
+                    if target_object in ["table", "worksurface"]:
+                        empty_spot = choice(self.find_empty_spots())
+                        index, target_object = empty_spot['index'], self.sim.getObjectAlias(empty_spot['handle'])
+                        self.sim.addLog(self.sim.verbosity_default, f"table grounding: found empty spot: /{target_object}[{empty_spot['index']}]")
+                        if verbose:
+                            print(f"table grounding: found empty spot: /{target_object}[{empty_spot['index']}]")
 
-                # -- we also want to consider the orientation of the object
-                orientation = self.sim.getObjectOrientation(goal, target)
-                goal_pose[3:] = self.sim.buildPose(goal_pose[:3], [orientation[0], orientation[1], math.pi + rotate])[3:]
+                    goal_pose = self.sim.getObjectPose(goal, robot)
 
-            else:
-                # -- account for fingertip placement on object:
-                goal_pose[2] += self.sim.getObjectFloatParam(goal, self.sim.objfloatparam_objbbox_max_z) * 1.5
-                # -- try to match the orientation of the surface object:
-                orientation = self.sim.getObjectOrientation(goal, robot)
-                goal_pose[3:] = self.sim.buildPose(goal_pose[:3], [-(math.pi), orientation[1], orientation[2] + rotate])[3:]
+                    # -- first, we find a spot that sits RIGHT ON TOP of the surface...
+                    goal_pose[2] += self.sim.getObjectFloatParam(goal, self.sim.objfloatparam_objbbox_max_z)
+                    # ... then we will find a spot that considers the height of the object:
+                    goal_pose[2] += self.sim.getObjectFloatParam(obj_in_hand, self.sim.objfloatparam_objbbox_max_z) \
+                        + (self.sim.getObjectFloatParam(fingertip_handle, self.sim.objfloatparam_objbbox_max_z)) if fingertip_handle != -1 else 0.0
+                    # * (1.5 if target_object not in ["table", "worksurface"] else 1.25)
 
+                    goal_pose[3:] = self.sim.getObjectPose(target, robot)[3:]
+
+                    candidate_goal_poses.append(goal_pose)
+
+            elif skip_errors: raise Exception("ERROR: placing without an object in hand?")
+
+        elif affordance in ['pour']:
+            # -- we will go to a position above the target container object at some offset based on the height of the source container object:
+            if obj_in_hand == -1 and not skip_errors:
+                sys.exit("ERROR: no object in hand for pouring!")
+
+            # -- we are going to keep the same orientation of the robot's gripper, but we will modify the position:
+            goal_pose = self.sim.getObjectPose(target, robot)
+            # -- let's move the goal position to where the target is as a base:
+            goal_pose[:3] = self.sim.getObjectPosition(goal, robot)
+
+            # NOTE: we will consider pouring either along the x-axis or y-axis:
+            # -- x-axis increases as we go to  the right!
+            pour_direction = 'left' if (self.sim.getObjectPosition(obj_in_hand, robot)[1] > self.sim.getObjectPosition(goal, robot)[1]) else 'right'
+
+            if verbose:
+                print(f"{self.sim.getObjectAlias(obj_in_hand)} is {pour_direction} of {self.sim.getObjectAlias(goal)}")
+                self.sim_print(f"{self.sim.getObjectAlias(obj_in_hand)} is {pour_direction} of {self.sim.getObjectAlias(goal)}")
+
+            # -- get the heights of the objects:
+            src_obj_height = self.sim.getObjectFloatParam(obj_in_hand, self.sim.objfloatparam_objbbox_max_z) * 2.0
+            # src_obj_width = self.sim.getObjectFloatParam(obj_in_hand, self.sim.objfloatparam_objbbox_max_y) * 2.0
+
+            tgt_obj_height = self.sim.getObjectFloatParam(goal, self.sim.objfloatparam_objbbox_max_z) * 2.0
+            tgt_obj_width = self.sim.getObjectFloatParam(goal, self.sim.objfloatparam_objbbox_max_y) * 2.0
+
+            # -- we want to position the object somewhere that is some offset to the side of the target container:
+            goal_pose[1] += (1.0 if pour_direction == 'left' else -1.0) * ((src_obj_height) + (tgt_obj_width * 0.0))
+
+            # -- we want the object to be placed somewhere above the target container:
+            goal_pose[2] += (tgt_obj_height) + (src_obj_height)
+
+            target_goal = self.sim.createDummy(0.025)
+            self.sim.setObjectPose(target_goal, goal_pose, self.sim.getObject(f'/{self.robot_name}'))
 
             candidate_goal_poses.append(goal_pose)
 
         return candidate_goal_poses
 
-    def return_home(self, method: int = 1):
-        # -- return back to starting position:
-        if method == 1:
-            self.ompl_path_planning(None, self.start_pose, self.simOMPL.Algorithm.RRTConnect, 20, 5, 5, 0)
-        else:
-            self.spline_path_planning(self.start_pose)
-
     def ompl_path_planning(
             self,
             target_object: str,
             goal_pose: list[float],
-            algorithm: int,
-            num_ompl_attempts: int,
-            max_compute: int,
-            max_simplify: int,
-            len_path: int,
-            rgb: list[float] = [0.0, 1.0, 0.0],
-            draw_path: bool = False,
+            ompl_args: dict = {},
+            draw_path: bool = True,
             ignore_dynamics: bool = False,
+            motion_method: str = "moveToConfig",
         ) -> bool:
 
         # -- formatting the string name for printing a cool message:
         if target_object:
-            self.sim.addLog(self.sim.getInt32Param(self.sim.intparam_verbosity), f'[OMPLement]: finding a plan to object "{target_object}"...')
+            self.sim_print(f'finding a plan to object "{target_object}"...')
 
         # -- create a dummy object that will represent the target goal:
         target_goal = self.sim.createDummy(0.025)
         self.sim.setObjectPose(target_goal, goal_pose, self.sim.getObject(f'/{self.robot_name}'))
-        self.sim.setObjectColor(target_goal, 0, self.sim.colorcomponent_ambient_diffuse, rgb)
+        self.sim.setObjectColor(target_goal, 0, self.sim.colorcomponent_ambient_diffuse, [0.0, 1.0, 0.0])
         self.sim.setObjectColor(target_goal, 0, self.sim.colorcomponent_emission, [0.6, 0.6, 0.6])
         self.sim.setObjectAlias(target_goal, 'OMPL_target')
 
         # -- we sleep for a bit so we can see this object appear in the sim:
         time.sleep(0.0001)
 
+        # NOTE: checking if key parameters have been specified for OMPL:
+        if not bool(ompl_args): ompl_args = {}
+        if "ompl_algorithm" not in ompl_args:
+            ompl_args["ompl_algorithm"] = "RRTConnect"
+        try:
+            if type(ompl_args['ompl_algorithm']) == str:
+
+                ompl_args['ompl_algorithm'] = eval(f"self.simOMPL.Algorithm.{ompl_args['ompl_algorithm']}")
+        except AssertionError:
+            print(f"WARNING: {ompl_args['ompl_algorithm']} is not a valid algorithm!\n"
+                  " -- Check out this page for list of algorithms: https://manual.coppeliarobotics.com/en/simOMPL.htm#enum:Algorithm")
+            ompl_args['ompl_algorithm'] = eval(f"self.simOMPL.Algorithm.RRTConnect")
+        if "ompl_num_attempts" not in ompl_args:
+            ompl_args["ompl_num_attempts"] = 5
+        if "ompl_max_compute" not in ompl_args:
+            ompl_args["ompl_max_compute"] = 15
+        if "ompl_max_simplify" not in ompl_args:
+            # NOTE: let OMPL do default simplification, signified by -1:
+            ompl_args["ompl_max_simplify"] = -1
+        if "ompl_len_path" not in ompl_args:
+            # NOTE: let OMPL do give default number of configs in solution path, signified by 0:
+            ompl_args["ompl_len_path"] = 0
+        if "ompl_state_resolution" not in ompl_args:
+            ompl_args["ompl_state_resolution"] = float("5.0e-3")
+        if "ompl_use_state_validation" not in ompl_args:
+            ompl_args["ompl_use_state_validation"] = True
+        if "ompl_use_lua" not in ompl_args:
+            ompl_args["ompl_use_lua"] = False
+        if "ompl_motion_constraint" not in ompl_args:
+            ompl_args["ompl_motion_constraint"] = "free"
+
         ompl_script = self.sim.getScript(self.sim.scripttype_simulation, self.sim.getObject('/OMPLement'))
 
-        path = self.sim.callScriptFunction(
+        path, _ = self.sim.callScriptFunction(
             "ompl_path_planning",
             ompl_script,
             {
                 "robot": self.robot_name,
                 "goal": target_goal,
-                "algorithm": algorithm,
-                "num_attempts": num_ompl_attempts,
-                "max_compute": max_compute,
-                "max_simplify": max_simplify,
-                "len_path": len_path,
+                "ompl_algorithm": ompl_args["ompl_algorithm"],
+                "ompl_max_compute": ompl_args["ompl_max_compute"],
+                "ompl_max_simplify": ompl_args["ompl_max_simplify"],
+                "ompl_len_path": ompl_args["ompl_len_path"],
+                "ompl_state_resolution": ompl_args["ompl_state_resolution"],
+                "ompl_motion_constraint": ompl_args["ompl_motion_constraint"],
+                "ompl_use_state_validation": ompl_args["ompl_use_state_validation"],
+                "ompl_use_lua": ompl_args["ompl_use_lua"],
             },
         )
 
+        time.sleep(0.01)
+
         if path:
-            self.sim.addLog(self.sim.getInt32Param(self.sim.intparam_verbosity), f'[OMPLement]: plan found!')
+            self.sim.addLog(self.sim.verbosity_default, f'[FOON-TAMP]: plan found!')
 
             # -- we need to disable the IK following done by the "target" dummy of the robot:
             # self.sim.setModelProperty(target, self.sim.modelproperty_scripts_inactive)
@@ -801,31 +929,38 @@ class Interfacer():
 
             self.sim.setObjectInt32Param(ik_script, self.sim.scriptintparam_enabled, 0)
 
-            self.start()
+            time.sleep(0.01)
 
-            # -- use a cubic spline to interpolate time points:
-            cs = CubicSpline(
-                [0, 0.3, 0.5, 0.8, 1],
-                [float('2.5e-3'), float('2.0e-3'), float('1.0e-3'), float('2.0e-3'), float('2.5e-3')]
-            )
-            xs = np.arange(0, 1, 1/len(path))
-            time_points = cs(xs)
+            self.sim_start()
 
-            if draw_path: drawn_object = self.sim.callScriptFunction('visualizePath', ompl_script, path, rgb)
+            # -- if set to true, we will draw the path in the simulation:
+            if draw_path: drawn_object = self.sim.callScriptFunction('visualizePath', ompl_script, path, [0.0, 1.0, 0.0])
 
             if ignore_dynamics:
                 for obj in self.objects_in_sim:
                     obj_handle = self.sim.getObject(f"/{obj}", {"noError": True})
                     if obj_handle != -1:
                         self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_static, 1)
-                        # self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_respondable, 0)
+                        self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_respondable, 1)
+                        self.sim.resetDynamicObject(obj_handle)
 
             time.sleep(0.01)
 
-            # -- with the computed path, we will gradually change the configuration of the robot:
-            for P in range(len(path)):
-                self.sim.callScriptFunction('setConfig', ompl_script, path[P])
-                time.sleep(time_points[P])
+            if motion_method != "moveToConfig":
+                # -- use a cubic spline to interpolate time points:
+                cs = CubicSpline(
+                    [0, 0.3, 0.5, 0.8, 1],
+                    [float('2.5e-3'), float('2.0e-3'), float('1.0e-3'), float('2.0e-3'), float('2.5e-3')]
+                )
+                xs = np.arange(0, 1, 1/len(path))
+                time_points = cs(xs)
+
+                # -- with the computed path, we will gradually change the configuration of the robot:
+                for P in range(len(path)):
+                    self.sim.callScriptFunction('setConfig_python', ompl_script, path[P])
+                    time.sleep(time_points[P])
+            else:
+                self.move_to_configs(path)
 
             time.sleep(0.01)
 
@@ -834,7 +969,7 @@ class Interfacer():
                     obj_handle = self.sim.getObject(f"/{obj}", {"noError": True})
                     if obj_handle != -1:
                         self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_static, 0)
-                        # self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_respondable, 1)
+                        self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_respondable, 1)
 
             # -- we need to re-enable the IK following done by the "target" dummy of the robot:
             self.sim.setObjectPosition(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObjectPosition(self.sim.getObject(f'/{self.robot_name}/tip')), -1)
@@ -843,12 +978,71 @@ class Interfacer():
             if draw_path: self.sim.removeDrawingObject(drawn_object)
 
         else:
-            self.sim.addLog(self.sim.getInt32Param(self.sim.intparam_verbosity), f'[OMPLement]: plan not found!')
+            self.sim.addLog(self.sim.verbosity_default, f'[FOON-TAMP]: plan not found!')
 
         # -- remove the OMPL target object:
         self.sim.removeObjects([self.sim.getObject('/OMPL_target')])
 
         return bool(path)
+
+    def move_to_configs(self, path: list[float]):
+        # NOTE: check the sim.moveToConfig() docs here: https://manual.coppeliarobotics.com/en/regularApi/simMoveToConfig.htm
+        vel = 120
+        accel = 120
+        jerk = 120
+
+        maxVel = [vel*math.pi/180, vel*math.pi/180, vel*math.pi/180, vel*math.pi/180, vel*math.pi/180, vel*math.pi/180, vel*math.pi/180]
+        maxAccel = [accel*math.pi/180, accel*math.pi/180, accel*math.pi/180, accel*math.pi/180, accel*math.pi/180, accel*math.pi/180, accel*math.pi/180]
+        maxJerk = [jerk*math.pi/180, jerk*math.pi/180, jerk*math.pi/180, jerk*math.pi/180, jerk*math.pi/180, jerk*math.pi/180, jerk*math.pi/180]
+
+        # -- get all the joint angles of the robot:
+        joint_handles = []
+        num_joints = 1
+
+        while True:
+            # -- using "noError" so default handle is -1 (if not found);
+            #    read more here: https://manual.coppeliarobotics.com/en/regularApi/simGetObject.htm
+            obj_handle = self.sim.getObject(f"/{self.robot_name}/joint", {"noError": True, "index":(num_joints-1)})
+
+            if obj_handle == -1: break
+
+            joint_handles.append(obj_handle)
+            num_joints += 1
+
+        robot_collection = self.sim.createCollection()
+        self.sim.addItemToCollection(robot_collection, self.sim.handle_tree, self.sim.getObject(f'/{self.robot_name}'), 0)
+
+
+        # -- change the simulation setting to stepping mode for threaded/non-blocking execution:
+        self.sim.setStepping(True)
+        self.sim.step()
+
+        # -- iterate through the entire plan of robot configurations:
+        for P in range(len(path)):
+            params = {
+                'joints': joint_handles,
+                'targetPos': path[P],
+                # 'maxVel': maxVel,
+                'targetVel': [0.55 * x for x in maxVel],
+                # 'maxAccel': maxAccel,
+                # 'maxJerk': maxJerk,
+            }
+            self.sim.moveToConfig(params)
+            is_collision, handles = self.sim.checkCollision(robot_collection,robot_collection)
+            # if bool(is_collision) and handles[0] != handles[1]:
+            #     print(f"TEST: there is a collision between {self.sim.getObjectAlias(handles[0])} and {self.sim.getObjectAlias(handles[1])}!")
+
+            self.sim.step()
+
+        # -- turn off stepping mode since we don't need it beyond this point:
+        self.sim.setStepping(False)
+
+    def return_home(self, method: int = 1):
+        # -- return back to starting position:
+        if method == 1:
+            self.ompl_path_planning(target_object=None, goal_pose=self.start_pose, )
+        else:
+            self.spline_path_planning(self.start_pose)
 
     def spline_adjust_trajectory(self, T: list[float]):
         ang_min = -0.7245
@@ -959,26 +1153,15 @@ class Interfacer():
     def execute(
             self,
             target_object: str,
+            ompl_args: dict,
             gripper_action: int,
-            algorithm: str = 'RRTConnect',
-            num_ompl_attempts: int = 5,
-            max_compute: int = 5,
-            max_simplify: int = 5,
-            len_path: int = 0,
             method: int = 1, # 1 :- OMPL, not(1) :- spline interpolation
         ) -> bool:
-
-
-        try:
-            algorithm = eval(f'self.simOMPL.Algorithm.{algorithm}')
-        except AttributeError:
-            print(f'WARNING: path planning algorithm "{algorithm}" does not exist!')
-            algorithm = eval('self.simOMPL.Algorithm.RRTConnect')
 
         # -- we will try to find configs with OMPL and find a collision-avoiding plan up to a certain number of times
         for _ in range(3 if target_object in ['table', 'worksurface'] else 1):
             # -- we will be generous and allow three attempts at finding an empty place on the table:
-            goal_poses = self.find_pose_for_ompl(target_object)
+            goal_poses = self.ompl_find_pose(target_object)
 
             goal_achieved = False
             for goal in goal_poses:
@@ -987,15 +1170,11 @@ class Interfacer():
                     success = self.ompl_path_planning(
                         target_object,
                         goal,
-                        algorithm,
-                        num_ompl_attempts,
-                        max_compute,
-                        max_simplify,
-                        len_path,
+                        ompl_args,
                     )
                 else:
                     # -- use a simpler spline path planning method:
-                    success = self.spline_path_planning(goal, num_ompl_attempts)
+                    success = self.spline_path_planning(goal, ompl_args["ompl_num_attempts"])
 
                 # -- check if we succeeded with this particular pose:
                 if success:
@@ -1016,7 +1195,14 @@ class Interfacer():
             start = self.sim.getObjectPosition(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObject(f'/{self.robot_name}')) + self.sim.getObjectOrientation(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObject(f'/{self.robot_name}'))
             # -- we want to position the gripper on the upper part of the object such that the proximity sensor detects an object:
             end = self.sim.getObjectPosition(self.sim.getObject(f'/{target_object}'), self.sim.getObject(f'/{self.robot_name}')) + self.sim.getObjectOrientation(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObject(f'/{self.robot_name}'))
-            end[2] += 0.5 * self.sim.getObjectFloatParam(self.sim.getObject(f'/{target_object}'), self.sim.objfloatparam_objbbox_max_z)
+
+            # -- placing the target to the very top of the object...
+            end[2] += (0.5 * self.sim.getObjectFloatParam(self.sim.getObject(f'/{target_object}'), self.sim.objfloatparam_objbbox_max_z))
+            # ... then we will lower it based on the length of the gripper's fingertip (if the finger element exists):
+            fingertip_handle = self.sim.getObject(f'/{target_object}_leftfinger_respondable', {"noError": True})
+            if fingertip_handle != -1:
+                # -- move the target down by half of the finger so that it is positioned in a more "stable" position:
+                end[2] -= (0.5 * self.sim.getObjectFloatParam(fingertip_handle, self.sim.objfloatparam_objbbox_max_z))
 
             traj_move_to_obj = self.generate_trajectory(
                 {'time': [0, 1], 'trajectory': [start, end]},
@@ -1026,22 +1212,12 @@ class Interfacer():
             # -- execute the trajectory and open the gripper:
             self.execute_trajectory(traj_move_to_obj)
 
-        self.end_effector(close=gripper_action)
+        self.act_end_effector(action=gripper_action)
 
         time.sleep(0.1)
 
         # NOTE: post-grasping check below:
-        # -- get the object handles for the gripper's attach point:
-        gripper_attachPoint = -1
-        children = self.sim.getObjectsInTree(self.sim.getObject(f"/{self.robot_name}"))
-        for C in children:
-            if "attachPoint" in self.sim.getObjectAlias(C):
-                gripper_attachPoint = C
-
-        if gripper_attachPoint == -1:
-            sys.exit("ERROR: robot gripper attach point was not found!")
-
-        obj_in_hand = self.sim.getObjectChild(gripper_attachPoint, 0)
+        obj_in_hand = self.get_object_in_hand()
         if gripper_action == 1:
             if obj_in_hand > -1:
                 # -- this means that we want to move the gripper up to remove the object from the top of the below object's surface:
@@ -1068,7 +1244,7 @@ class Interfacer():
 
         # -- if the robot fails to grip something, open the gripper back up:
         if gripper_action == 1:
-            self.end_effector(close=0)
+            self.act_end_effector(close=0)
 
         return False
 
@@ -1135,21 +1311,13 @@ class Interfacer():
 
             self.execute_trajectory(traj_move_down)
 
-        self.end_effector(gripper_action)
+        self.act_end_effector(gripper_action)
 
         time.sleep(0.01)
 
         # -- get the object handles for the gripper's attach point:
-        gripper_attachPoint = -1
-        children = self.sim.getObjectsInTree(self.sim.getObject(f"/{self.robot_name}"))
-        for C in children:
-            if "attachPoint" in self.sim.getObjectAlias(C):
-                gripper_attachPoint = C
+        obj_in_hand = self.get_object_in_hand()
 
-        if gripper_attachPoint == -1:
-            sys.exit("ERROR: robot gripper attach point was not found!")
-
-        obj_in_hand = self.sim.getObjectChild(gripper_attachPoint, 0)
         if obj_in_hand > -1:
             # -- this means that we want to move the gripper up to remove the object from the top of the below object's surface:
             start = self.sim.getObjectPosition(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObject(f'/{self.robot_name}')) + self.sim.getObjectOrientation(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObject(f'/{self.robot_name}'))
@@ -1167,16 +1335,17 @@ class Interfacer():
 
         return True
 
-    def end_effector(self, close: int = -1):
+    def act_end_effector(self, action: int = -1):
+        # NOTE: action :- 1 - close, 0 - open, -1 - no action
         message = "maintaining gripper state..."
-        if close == 1:
+        if action == 1:
             message = 'closing gripper...'
-        elif close == 0:
+        elif action == 0:
             message = 'opening gripper...'
 
-        self.sim.addLog(self.sim.getInt32Param(self.sim.intparam_verbosity), f'[OMPLement]: {message}')
-        if close != -1:
-            self.sim.setInt32Signal('close_gripper', close)
+        self.sim_print(message)
+        if action != -1:
+            self.sim.setInt32Signal('close_gripper', action)
 
     def generate_trajectory(
             self,
@@ -1197,7 +1366,7 @@ class Interfacer():
         ):
         robot_handle, gripper_handle = self.sim.getObject(f'/{self.robot_name}'), self.sim.getObject(f'/{self.robot_name}/target')
 
-        self.start()
+        self.sim_start()
         for T in traj:
             # -- set the gripper's position and orientation according to the recorded trajectory:
             self.sim.setObjectPosition(gripper_handle, robot_handle, list(T[0:3]))
@@ -1208,7 +1377,198 @@ class Interfacer():
         #endfor
 
         # -- use the gripper actions to decide whether to open or close gripper (0 and 1 respectively, otherwise -1 -- no change):
-        if gripper_action != -1: self.end_effector(close=gripper_action)
+        if gripper_action != -1: self.act_end_effector(close=gripper_action)
+
+    ############################################################
+    # NOTE: skill definitions:
+    ############################################################
+
+    def pick(
+            self,
+            target_object: str,
+            ompl_args: dict = {},
+            affordance: str = 'pick-top',
+        ):
+
+        start_time = time.time()
+
+        goal_achieved = False
+
+        # -- we will try to find configs with OMPL and find a collision-avoiding plan up to a certain number of times
+        for _ in range(3 if target_object in ['table', 'worksurface'] else 1):
+            # -- we will be generous and allow three attempts at finding an empty place on the table:
+            goal_poses = self.ompl_find_pose(target_object, affordance)
+
+            for G in range(len(goal_poses)):
+                # -- use the OMPL-based path planning method:
+                success = self.ompl_path_planning(
+                    target_object,
+                    goal_poses[G],
+                    dict(ompl_args),
+                )
+
+                # -- check if we succeeded with this particular pose:
+                if success:
+                    goal_achieved = goal_poses[G]
+                    break
+
+            if bool(goal_achieved): break
+
+        # -- if we could not find a plan, then we just return:
+        if not goal_achieved: return False
+
+        # -- close the gripper
+        self.act_end_effector(action=1)
+
+        time.sleep(0.5)
+
+        # -- move the end-effector up:
+        goal_achieved[2] += 0.1
+
+        # NOTE: post-grasping check below:
+        # -- get the object handles for the gripper's attach point:
+        obj_in_hand = self.get_object_in_hand()
+
+        if obj_in_hand > -1:
+            # -- this means that we want to move the gripper up to remove the object from the top of the below object's surface:
+            start = self.sim.getObjectPosition(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObject(f'/{self.robot_name}')) + self.sim.getObjectOrientation(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObject(f'/{self.robot_name}'))
+            end = list(start)
+            # -- we want to move up by half the height of the object:
+            # end[2] += self.sim.getObjectFloatParam(obj_in_hand, self.sim.objfloatparam_objbbox_max_z)
+            end[2] += 0.02
+
+            # -- we also want to pick up the object and align it with the base of the robot:
+
+            traj_move_up = self.spline_adjust_trajectory(
+                self.generate_trajectory({'time': [0, 1], 'trajectory': [start, end]}, ntraj=25)
+            )
+
+            # -- execute the trajectory but do not change the state of the gripper:
+            self.execute_trajectory(traj_move_up)
+
+            if target_object in self.sim.getObjectAlias(obj_in_hand):
+            # -- this means that we have successfully grasped the intended object:
+                return True
+
+        print(f'\t-- total time: {time.time() - start_time}')
+
+        return False
+
+    def place(
+            self,
+            target_object: str,
+            ompl_args: dict = {},
+            affordance: str = 'place-top',
+        ):
+
+        start_time = time.time()
+
+        goal_achieved = False
+
+        if not self.check_if_object_in_hand():
+            return False
+
+        # -- we will try to find configs with OMPL and find a collision-avoiding plan up to a certain number of times
+        for _ in range(3 if target_object in ['table', 'worksurface'] else 1):
+            # -- we will be generous and allow three attempts at finding an empty place on the table:
+            goal_poses = self.ompl_find_pose(target_object, affordance)
+
+            for goal in goal_poses:
+                # -- use the OMPL-based path planning method:
+                success = self.ompl_path_planning(
+                    target_object,
+                    goal,
+                    ompl_args,
+                )
+
+                # -- check if we succeeded with this particular pose:
+                if success:
+                    goal_achieved = success
+                    break
+
+            if goal_achieved: break
+
+        # -- if we could not find a plan, then we just return:
+        if not goal_achieved: return False
+
+        # -- close the gripper
+        self.act_end_effector(action=0)
+
+        if self.check_if_object_in_hand():
+            # -- an object should not be in the hand at this point, so just a sanity check:
+            return False
+
+        time.sleep(1)
+
+        print(f'\t-- total time: {time.time() - start_time}')
+
+        return True
+
+    def pour(
+            self,
+            source_container: str,
+            target_container: str,
+            ompl_args: dict = {},
+        ):
+
+        start_time = time.time()
+
+        if self.get_object_in_hand() != self.sim.getObject(f"/{source_container}"):
+            print("WARNING: object in hand is not equal to the source container (is this intended?)")
+
+        # NOTE: pouring comprises of the following subactions:
+        #   1. pre-pouring: positioning a source container to a target container
+        #   3. rotate the source container to transfer contents
+        #   4. place the source container back somewhere
+
+        # -- now, we need to find a path for pre-pouring:
+        while True:
+            result = self.ompl_path_planning(
+                target_object=target_container,
+                goal_pose=self.ompl_find_pose(
+                    target_object=target_container,
+                    affordance='pour',
+                )[0],
+                ompl_args=ompl_args,
+            )
+
+            if result: break
+
+        robot = self.sim.getObject(f'/{self.robot_name}')
+        target = self.sim.getObject(f'/{self.robot_name}/target')
+
+        src_object_pos = self.sim.getObjectPosition(target, robot)
+        tgt_object_pos = self.sim.getObjectPosition(self.sim.getObject(f"/{target_container}"), robot)
+
+        # -- let's determine the direction of pouring:
+        pour_direction = 'left' if src_object_pos[1] > tgt_object_pos[1] else 'right'
+
+        # -- this is the maximum angle we will perform rotation:
+        max_rotation = 120
+
+        # -- get the initial pose of the gripper:
+        start = self.sim.getObjectPose(target, robot)
+
+        trajectory = [start]
+
+        # -- rotate forward...
+        for angle in range(max_rotation):
+            end = self.sim.rotateAroundAxis(start, [1, 0, 0], start[:3], (angle * math.pi/180) * (-1.0 if pour_direction == "right" else 1.0))
+            self.sim.setObjectPose(target, end, robot)
+            trajectory.append(list(end))
+            time.sleep(0.001)
+
+        time.sleep(1)
+        trajectory.reverse()
+
+        # ... and back!
+        for pose in trajectory:
+            self.sim.setObjectPose(target, pose, robot)
+            time.sleep(0.001)
+
+        print(f'\t-- total time: {time.time() - start_time}')
+
+        return True
 
 
 class UTAMP:
@@ -1403,11 +1763,11 @@ class UTAMP:
                 sql_command = f'UPDATE utamp_data SET status = {status} WHERE user_id = 51'
                 cursor.execute(sql_command)
 
-                str_objects = sim_interfacer.perform_sensing(method=2, verbose=verbose)
+                str_objects = self.perform_sensing(method=2, verbose=verbose)
                 if verbose:
                     print(str_objects)
 
-                for obj in sim_interfacer.objects_in_sim:
+                for obj in self.objects_in_sim:
                     if obj not in str_objects:
                         print(obj)
 
@@ -1419,6 +1779,7 @@ class UTAMP:
             return True
 
         return False
+
 
 def get_quaternion_from_euler(roll, pitch, yaw):
     """
@@ -1442,335 +1803,6 @@ def get_quaternion_from_euler(roll, pitch, yaw):
     qw = np.cos(roll / 2) * np.cos(pitch / 2) * np.cos(yaw / 2) - np.sin(roll / 2) * np.sin(pitch / 2) * np.sin(yaw / 2)
 
     return [qw, qx, qy, qz]
-
-
-def create_domain_file(
-        objects_in_sim: list,
-        micro_fpath: str,
-        template_domain_fpath: str,
-        domain_name: str = 'olp-2024',
-        typing: list = None,
-    ) -> str:
-
-    # -- we are going to inject new objects into the
-    micro_domain_fpath = os.path.join(micro_fpath, template_domain_fpath)
-
-    with open(micro_domain_fpath, 'w') as pddl_file:
-
-        # -- the template file contains all of the default skills for our robot:
-        with open(template_domain_fpath) as f:
-            domain_file_lines = f.readlines()
-            for L in domain_file_lines:
-                if '(:constants' in L:
-                    pddl_file.write(f'{L}')
-                    for O in objects_in_sim:
-                        # -- check if an object in the scene has been classified as special PDDL type:
-                        object_type = 'object'
-                        if typing:
-                            for T in typing:
-                                if O in typing[T]:
-                                    pddl_file.write(f'\t\t{O} - {T}\n')
-
-                        else:
-                            pddl_file.write(f'\t\t{O} - {object_type}\n')
-
-                elif '(domain' in L:
-                    pddl_file.write(f'(define (domain {domain_name})')
-
-                else:
-                    pddl_file.write(f'{L}')
-
-    return micro_domain_fpath
-
-
-def create_problem_file(
-        preconditions: list,
-        effects: list,
-        micro_fpath: str,
-        action_name: str,
-        state: dict,
-        domain_name: str = 'olp-2024',
-    ) -> str:
-
-    on_object_layout = state['on']
-    in_object_layout = state['in']
-    under_object_layout = state['under']
-
-    micro_problem_fpath = os.path.join(micro_fpath, f"{action_name}.pddl",)
-
-    with open(micro_problem_fpath, 'w') as pddl_file:
-
-        pddl_file.write(f'(define (problem {Path(micro_fpath).stem})\n')
-        pddl_file.write(f'(:domain {domain_name})\n')
-        pddl_file.write('(:init' + '\n')
-
-        # -- dictionary that will ground object names from conceptual (domain-independent) space to
-        # 	simulated (domain-specific) space:
-        grounded_objects = {}
-
-        if 'hand' in in_object_layout:
-            if in_object_layout['hand'] == 'air':
-                # -- hand should be empty (i.e., contains 'air')
-                pddl_file.write('\t; hand/end-effector must be empty (i.e. contains "air"):\n')
-            else:
-                # -- hand is not empty for whatever reason:
-                pddl_file.write('\t; hand/end-effector contains some type of object:\n')
-
-            pddl_file.write('\t' + '(in hand ' + str(in_object_layout['hand']) +')' + '\n')
-            pddl_file.write('\t' + '(under hand ' + str(under_object_layout['hand']) +')' + '\n')
-        else:
-            # -- hand will be empty by default:
-            pddl_file.write('\t; hand/end-effector must be empty (i.e. contains "air"):\n')
-            pddl_file.write('\t' + '(in hand air)' + '\n')
-
-        if 'olp' in domain_name:
-            pddl_file.write('\t' + '(not (is-mobile))' + '\n')
-
-        # -- identifying all objects that are being referenced as preconditions:
-        all_objects, on_objects = set(), set()
-        for pred in preconditions:
-            predicate_parts = pred[1:-1].split(' ')
-            # -- we are just reviewing all of the objects referenced by predicates...
-            all_objects.add(predicate_parts[1])
-            if len(predicate_parts) > 2:
-                all_objects.add(predicate_parts[2])
-
-            # ... but we also need to note all that have already been referenced by the "on" predicate:
-            if predicate_parts[0] == 'on' and predicate_parts[1] != 'cutting_board':
-                on_objects.add(predicate_parts[1])
-        # endfor
-
-        # -- we will write the current object layout as obtained from the "perception" step.
-        written_predicates = []
-
-        for obj in list(on_object_layout.keys()):
-            # -- writing the "on" relation predicate:
-            on_pred = str('(on ' + obj + ' ' + on_object_layout[obj] + ')')
-            written_predicates.append(on_pred)
-
-            if obj in under_object_layout:
-                # -- writing the "under" relation predicate:
-                under_pred = str('(under ' + obj + ' ' + under_object_layout[obj] + ')')
-
-                # -- write the predicate to the micro-problem file:
-                written_predicates.append(under_pred)
-
-        for obj in list(under_object_layout.keys()):
-            # if under_object_layout[obj] not in on_object_layout and under_object_layout[obj] not in ['air']:
-            if under_object_layout[obj] not in ['air']:
-                on_pred = str('(on ' + under_object_layout[obj] + ' ' + obj + ')')
-                written_predicates.append(on_pred)
-
-        if written_predicates:
-            # -- remove any duplicates:
-            written_predicates = sorted(list(set(written_predicates)))
-
-            pddl_file.write('\n\t; current state of environment (object layout from perception):\n')
-            for pred in written_predicates:
-                pddl_file.write('\t' + pred + '\n')
-
-        written_predicates = []
-
-        # NOTE: some objects in the simulation space have names that will combine two words together:
-        #	e.g., we could have:	1. (in bottle vodka) -- bottle_vodka
-        #				2. (in cup lemon_juice) -- cup_lemon_juice
-        # -- because of this, we need to review those predicates that remain for "grounding"
-        # 	to simulation instances.
-
-        for pred in preconditions:
-            # -- if we use the perception-based method to acquire initial state,
-            #	then we will need to change required FOON states to current state:
-            pred_parts = pred[1:-1].split(' ')
-
-            # -- when using the perception-based method, we will acquire "on" or "under" conditions for the tables;
-            #	therefore, we could ignore these states in particular.
-
-            if len(pred_parts) < 3:
-                written_predicates.append(str('\t' + pred + '\n'))
-
-            elif 'table' in [pred_parts[1], pred_parts[2]]:
-                continue
-
-            else:
-                # -- in this case, we should only be considering predicates
-                #       of relation "in":
-                if pred_parts[0] != 'in':
-                    continue
-
-                # -- we would have to consider grounding the objects to their simulated counter-parts.
-                obj1, obj2 = pred_parts[1], pred_parts[2]
-                if str(pred_parts[1] + '_' + pred_parts[2]) in on_object_layout:
-                    obj1 = pred_parts[1] + '_' + pred_parts[2]
-                if str(pred_parts[2] + '_' + pred_parts[1]) in on_object_layout:
-                    obj2 = pred_parts[2] + '_' + pred_parts[1]
-
-                # -- we will preserve a mapping between domain-independent and domain-specific objects:
-                grounded_objects[pred_parts[1]] = obj1
-                grounded_objects[pred_parts[2]] = obj2
-
-                grounded_pred = str('(' + pred_parts[0] + ' ' + obj1 + ' ' + obj2 + ')')
-                if obj1 != 'air' and grounded_pred not in written_predicates:
-                    written_predicates.append(grounded_pred)
-
-                    # -- we will also put the reverse fact that obj1 is under obj2 if it is in obj1
-                    reversed_pred = str('(' + 'under' + ' ' + obj2 + ' ' + obj1 + ')')
-                    written_predicates.append(reversed_pred)
-
-        if written_predicates:
-            # -- remove any duplicates:
-            written_predicates = list(set(sorted(written_predicates)))
-
-            pddl_file.write('\n\t; precondition predicates obtained directly from macro PO:\n')
-            for pred in written_predicates:
-                pddl_file.write('\t' + pred + '\n')
-
-        pddl_file.write(')\n\n')
-
-        pddl_file.write('(:goal (and\n')
-
-        # -- hand must be empty after executing action to free it for next macro-PO:
-        if "(in hand air)" not in effects:
-            pddl_file.write('\t; hand/end-effector must be also be empty after execution (i.e. contains "air"):\n')
-            pddl_file.write('\t(in hand air)\n\n')
-
-        pddl_file.write('\t; effect predicates obtained directly from macro PO:\n')
-
-        # -- the effects (post-conditions) for a macro PO will form the goals:
-
-        grounded_goals = {'reg': [], 'neg': []}
-
-        for pred in effects:
-            predicate_parts = pred[1:-1].split(' ')
-
-            # -- we need to treat negation predicates special so we print them correctly:
-            is_negation = False
-            if predicate_parts[0] == 'not':
-                is_negation = True
-                predicate_parts = list(filter(None, predicate_parts[1:]))
-
-                for x in range(len(predicate_parts)):
-                    # -- remove any trailing parentheses characters:
-                    predicate_parts[x] = predicate_parts[x].replace('(', '')
-                    predicate_parts[x] = predicate_parts[x].replace(')', '')
-
-            if 'mix' in Path(micro_fpath).stem and (len(set(predicate_parts[1:]) - set(all_objects)) > 0 or is_negation):
-                # -- if we are mixing ingredients, we need to omit all negations of individual ingredients;
-                #	this is because, on the micro level, only the container is viewed as being "mixed".
-
-                # -- here, we omit the following cases of predicates when mixing:
-                # 	1. individual ingredients making up will be negated after the process of mixing
-                #	2. when an object is mixed, we form a new object that was not referenced as an input or precondition
-                #		(e.g. when mixing salad ingredients, we create a new object "salad")
-                pass
-
-            else:
-                # -- first, check if there is any grounding that needs to be done to simulation objects:
-                obj1 = grounded_objects[predicate_parts[1]] if str(
-                    predicate_parts[1]) in grounded_objects else str(predicate_parts[1])
-
-                obj2 = ''
-                if len(predicate_parts) > 2:
-                    obj2 = grounded_objects[predicate_parts[2]] if str(
-                        predicate_parts[2]) in grounded_objects else str(predicate_parts[2])
-
-                # # -- if any of the referenced objects are "table", then we need to ground the table to the proper grid-space:
-                # if 'table' in [obj1, obj2]:
-                #     # -- this means that we have an "on" or "under" predicate if something is on the table:
-                #     is_table_obj1 = bool(obj1 == 'table')
-
-                #     found_mapping = False
-                #     for item in on_object_layout:
-                #         if on_object_layout[item] == (obj2 if is_table_obj1 else obj1):
-                #             if is_table_obj1:
-                #                 obj1 = item
-                #             else:
-                #                 obj2 = item
-                #             found_mapping = True
-                #             break
-
-                #     if not found_mapping:
-                #         # -- if we could not find a grounding for the table in the scene, skip this predicate:
-                #         continue
-
-                if is_negation:
-                    grounded_goals['neg'].append(f"\t(not ({predicate_parts[0]} {obj1} {obj2 if obj2 else ''}))\n")
-                else:
-                    grounded_goals['reg'].append(f"\t({predicate_parts[0]} {obj1} {obj2 if obj2 else ''})\n")
-                    pddl_file.write(grounded_goals['reg'][-1])
-
-        # print(f'\n\n{grounded_goals}\n\n')
-
-        # -- checking to see if there are any contradictions:
-        for pred1 in grounded_goals['neg']:
-            is_contradiction = False
-            for pred2 in grounded_goals['reg']:
-                is_contradiction = str(pred2).strip() in pred1
-                if is_contradiction: break
-
-            if not is_contradiction:
-                pddl_file.write(pred1)
-
-
-        pddl_file.write('))\n')
-        pddl_file.write('\n)')
-
-    return micro_problem_fpath
-# enddef
-
-
-def find_plan(
-        domain_file: str,
-        problem_file: str,
-        plan_file: str = None,
-        verbose: bool = False,
-    ) -> str:
-
-    # NOTE: define plan execution function that can be called for different parameters:
-
-    # -- this will store the output that would normally be seen in the terminal
-    planner_output = None
-    command = None
-
-    # -- based on the planner we use, the required command changes:
-    if planner_to_use == 'fast-downward':
-        # NOTE: more information on aliases for Fast-Downward can be found here: https://www.fast-downward.org/IpcPlanners
-        # -- you can use a different algorithm for more optimal or satisficing results:
-        method = configs[algorithm][heuristic]
-
-        command = ['python3', str(path_to_planners[planner_to_use])]
-        if plan_file:
-            command.extend(['--plan-file', plan_file])
-        command.extend([domain_file, problem_file, '--search', method])
-
-    elif planner_to_use == 'PDDL4J':
-        command = ['java', '-jar', str(path_to_planners[planner_to_use]),  '-o', domain_file, '-f', problem_file]
-
-    if verbose:
-        print(f'run this command: {str(" ".join(command))}')
-
-    try:
-        planner_output = subprocess.check_output(command)
-    except subprocess.CalledProcessError as e:
-        print(f"  -- [FOON-TAMP] : Planner error (planner:  {planner_to_use}, error code: {e.returncode})!\n\t-- Actual message: {e.output}")
-
-    return planner_output
-# enddef
-
-
-def solve(output: str, verbose:bool = False) -> tuple[bool, str]:
-    # -- using planner-specific string checking to see if a plan was found:
-    global planner_to_use
-    if verbose:
-        print(str(output))
-    if planner_to_use == 'fast-downward':
-        time_taken = None
-        if "Total time: " in str(output):
-            time_taken = str(output).split("Total time: ")[1].split("s")[0]
-        return bool('Solution found.' in str(output)), (float(time_taken) if time_taken else None)
-    elif planner_to_use == 'PDDL4J':
-        # TODO: implement integration with other planners such as PDDL4J
-        return False
-    return False
 
 
 if __name__ == "__main__":

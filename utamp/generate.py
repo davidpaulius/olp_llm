@@ -73,7 +73,7 @@ def randomize_blocks(
                 sim_interfacer.sim.setObjectColor(new_block, 0, sim_interfacer.sim.colorcomponent_ambient_diffuse, rgb)
             elif block_type == 'alphabets':
                 # -- set the texture for the alphabetic blocks:
-                sim_interfacer.sim.setShapeTexture(new_block, texture_objs[atr][1], sim_interfacer.sim.texturemap_cube, 15, block_size[:-1], None, [0, 0, math.pi])
+                sim_interfacer.sim.setShapeTexture(new_block, texture_objs[atr][1], sim_interfacer.sim.texturemap_cube, 13, block_size[:-1], None, [0, 0, math.pi])
 
             # -- set the edge to being solid and visible:
             sim_interfacer.sim.setObjectInt32Param(new_block, sim_interfacer.sim.shapeintparam_edge_visibility, 1)
@@ -93,7 +93,7 @@ def randomize_blocks(
     object_spots = []
 
     # -- shuffle the order of block placement:
-    shuffle(all_objects)
+    # shuffle(all_objects)
 
     if block_type == 'alphabets':
         # -- delete texture objects if they are present:
@@ -108,6 +108,8 @@ def randomize_blocks(
 
         object_spots.append(dummy)
 
+    shuffle(object_spots)
+
     # -- randomly remove some table spots from consideration:
     for x in range(num_empty_spots):
         object_spots.pop(randint(0, len(object_spots) - 1))
@@ -118,7 +120,7 @@ def randomize_blocks(
         stack = 0
         if 'block' in sim_interfacer.sim.getObjectAlias(O):
             # -- we will flip a coin to determine whether the object will be stacked on another object or not:
-            stack = randint(0, 1)
+            stack = choice([0, 0, 0, 1])
 
         while True:
             if 'block' in sim_interfacer.sim.getObjectAlias(O):
@@ -130,14 +132,12 @@ def randomize_blocks(
 
             if selected not in object_spots and all_objects.index(selected) >= all_objects.index(O): continue
 
-            if not bool(stack):
-                if bool(on_objects[selected]):
-                    # -- if there is something in the spot, then we cannot stack it:
-                    continue
-            elif bool(stack):
-                if bool(on_objects[selected]):
-                    # -- if something is on the randomly selected object, then we cannot put something on it:
-                    continue
+            if not bool(stack) and bool(on_objects[selected]):
+                # -- if there is something in the spot, then we cannot stack it:
+                continue
+            elif bool(stack) and bool(on_objects[selected]):
+                # -- if something is on the randomly selected object, then we cannot put something on it:
+                continue
 
             # NOTE: we must add an offset to the z-axis that accounts for the height of the object being stacked
             #       as well as the object below it:
