@@ -8,27 +8,6 @@ plt.rcParams['pdf.fonttype'] = 42
 plt.rcParams['ps.fonttype'] = 42
 
 
-def compute_mean_err_bar(data, confidence=None):
-	# Sample data
-	data = np.array(data)
-
-	# Sample mean and standard error
-	mean = np.mean(data)
-	std_error = stats.sem(data)  # standard error of the mean
-
-	if confidence:  # 95% confidence interval
-		# Compute the 95% confidence interval; use t-distribution since sample size < 30
-		n = len(data)
-		t_critical = stats.t.ppf((1 + confidence) / 2, df=n-1)  # t-critical value for 95% CI
-
-		margin_of_error = t_critical * std_error
-		# confidence_interval = (mean - margin_of_error, mean + margin_of_error)
-		err_bar = margin_of_error
-	else:
-		err_bar = std_error
-	return mean, err_bar
-
-
 def make_plot():
 	spelling = {
 		"OLP": {
