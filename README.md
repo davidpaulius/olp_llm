@@ -1,6 +1,6 @@
 # olp_llm: Bootstrapping Object-Level Planning with Large Language Models
 
-NOTE: This code is for the ICRA 2025 paper entitled ["Bootstrapping Object-Level Planning with Large Language Models"](https://davidpaulius.github.io/olp_llm).
+**NOTE:** This code is for the ICRA 2025 paper entitled ["Bootstrapping Object-Level Planning with Large Language Models"](https://davidpaulius.github.io/olp_llm) (Authors: David Paulius, Alejandro Agostini, Benedict Quartey, and George Konidaris).
 
 ## Preliminaries:
 
@@ -22,6 +22,10 @@ python3 -m pip install coppeliasim-zmqremoteapi-client
 ```
 
 ### III. Python Requirements
+
+```
+pip3 install -r requirements.txt
+```
 
 ## How to Run
 
