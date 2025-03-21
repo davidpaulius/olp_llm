@@ -3,7 +3,7 @@ import os
 import math
 
 from random import randint, choice, sample, shuffle
-from utamp.driver import Interfacer
+from utamp.utils import Interfacer
 
 client = None
 

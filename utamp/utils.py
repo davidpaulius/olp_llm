@@ -43,7 +43,7 @@ class Interfacer():
         self.sim = self.client.require('sim')
         status = self.load_scene(scene_file_name)
         if not bool(status):
-            print("ERROR: something went wrong with scene load function!")
+            sys.exit("ERROR: something went wrong with scene load function!")
 
         # -- loading required modules for simulation:
         self.simIK = self.client.require('simIK')
@@ -57,6 +57,10 @@ class Interfacer():
         self.start_pose = self.sim.getObjectPose(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObject(f'/{self.robot_name}'))
 
         self.start_time = time.time()
+
+        # -- get the reference to the object containing the OMPLement script in CoppeliaSim:
+        self.ompl_script = self.sim.getScript(self.sim.scripttype_simulation, self.sim.getObject('/OMPLement'))
+
 
     def load_scene(self, scene_file_name: str) -> int:
         # -- if any simulation is currently running, stop it before closing the scene:
@@ -712,7 +716,7 @@ class Interfacer():
     # NOTE: OMPL-related planning:
     ############################################################
 
-    def ompl_find_pose(
+    def ompl_get_target_pose(
             self,
             target_object: str,
             affordance: str = 'pick-top',
@@ -748,7 +752,7 @@ class Interfacer():
             # -- we are considering different end-effector orientations for picking an object:
             if obj_in_hand == -1:
 
-                for angular_offset in [0.0, (math.pi/2), math.pi, (3*math.pi/2), (math.pi*2)]:
+                for angular_offset in [0.0, (math.pi/2), (math.pi), (3*math.pi/2)]:
                     # -- first, let's get the position set:
                     goal_pose = self.sim.getObjectPose(goal, robot)
 
@@ -763,13 +767,13 @@ class Interfacer():
                         goal_pose[2] += self.sim.getObjectFloatParam(goal, self.sim.objfloatparam_objbbox_max_z) \
                             - (self.sim.getObjectFloatParam(fingertip_handle, self.sim.objfloatparam_objbbox_max_z)) if fingertip_handle != -1 else 0.0
 
-                    for rotate in [0.0, math.pi]:
+                    for rotate in [0.0, math.pi, ]:
                         # -- now we will consider the orientation of the gripper depending on the task:
                         goal_pose_copy = list(goal_pose)
 
                         orientation = self.sim.getObjectOrientation(goal, robot)
                         if 'side' in affordance:
-                            goal_pose_copy[3:] = self.sim.buildPose(goal_pose[:3], [orientation[0], (math.pi/2) + angular_offset, orientation[2] + rotate])[3:]
+                            goal_pose_copy[3:] = self.sim.buildPose(goal_pose[:3], [orientation[0], (math.pi/2) + angular_offset, rotate])[3:]
                         elif 'top' in affordance:
                             goal_pose_copy[3:] = self.sim.buildPose(goal_pose[:3], [-(math.pi) + rotate, orientation[1], orientation[2] + angular_offset])[3:]
 
@@ -842,15 +846,12 @@ class Interfacer():
 
         return candidate_goal_poses
 
-    def ompl_path_planning(
+    def ompl_compute(
             self,
-            target_object: str,
-            goal_pose: list[float],
+            target_pose: list[float],
+            target_object: str = None,
             ompl_args: dict = {},
-            draw_path: bool = True,
-            ignore_dynamics: bool = False,
-            motion_method: str = "moveToConfig",
-        ) -> bool:
+        ) -> list[float]:
 
         # -- formatting the string name for printing a cool message:
         if target_object:
@@ -858,25 +859,26 @@ class Interfacer():
 
         # -- create a dummy object that will represent the target goal:
         target_goal = self.sim.createDummy(0.025)
-        self.sim.setObjectPose(target_goal, goal_pose, self.sim.getObject(f'/{self.robot_name}'))
+        self.sim.setObjectPose(target_goal, target_pose, self.sim.getObject(f'/{self.robot_name}'))
         self.sim.setObjectColor(target_goal, 0, self.sim.colorcomponent_ambient_diffuse, [0.0, 1.0, 0.0])
         self.sim.setObjectColor(target_goal, 0, self.sim.colorcomponent_emission, [0.6, 0.6, 0.6])
         self.sim.setObjectAlias(target_goal, 'OMPL_target')
 
         # -- we sleep for a bit so we can see this object appear in the sim:
-        time.sleep(0.0001)
+        time.sleep(0.001)
 
         # NOTE: checking if key parameters have been specified for OMPL:
         if not bool(ompl_args): ompl_args = {}
+        else: ompl_args = dict(ompl_args)
+
         if "ompl_algorithm" not in ompl_args:
             ompl_args["ompl_algorithm"] = "RRTConnect"
         try:
-            if type(ompl_args['ompl_algorithm']) == str:
-
-                ompl_args['ompl_algorithm'] = eval(f"self.simOMPL.Algorithm.{ompl_args['ompl_algorithm']}")
+            ompl_args['ompl_algorithm'] = eval(f"self.simOMPL.Algorithm.{ompl_args['ompl_algorithm']}")
         except AssertionError:
             print(f"WARNING: {ompl_args['ompl_algorithm']} is not a valid algorithm!\n"
                   " -- Check out this page for list of algorithms: https://manual.coppeliarobotics.com/en/simOMPL.htm#enum:Algorithm")
+            # -- just default to using RRTConnect:
             ompl_args['ompl_algorithm'] = eval(f"self.simOMPL.Algorithm.RRTConnect")
         if "ompl_num_attempts" not in ompl_args:
             ompl_args["ompl_num_attempts"] = 5
@@ -896,12 +898,15 @@ class Interfacer():
             ompl_args["ompl_use_lua"] = False
         if "ompl_motion_constraint" not in ompl_args:
             ompl_args["ompl_motion_constraint"] = "free"
+        if "ompl_limits_6d" not in ompl_args:
+            ompl_args["ompl_limits_6d"] = None
 
-        ompl_script = self.sim.getScript(self.sim.scripttype_simulation, self.sim.getObject('/OMPLement'))
+        # NOTE: the sim must be started in order for this script function to work:
+        self.sim_start()
 
         path, _ = self.sim.callScriptFunction(
             "ompl_path_planning",
-            ompl_script,
+            self.ompl_script,
             {
                 "robot": self.robot_name,
                 "goal": target_goal,
@@ -913,79 +918,78 @@ class Interfacer():
                 "ompl_motion_constraint": ompl_args["ompl_motion_constraint"],
                 "ompl_use_state_validation": ompl_args["ompl_use_state_validation"],
                 "ompl_use_lua": ompl_args["ompl_use_lua"],
+                "ompl_limits_6d": ompl_args["ompl_limits_6d"],
             },
         )
 
-        time.sleep(0.01)
-
-        if path:
-            self.sim.addLog(self.sim.verbosity_default, f'[FOON-TAMP]: plan found!')
-
-            # -- we need to disable the IK following done by the "target" dummy of the robot:
-            # self.sim.setModelProperty(target, self.sim.modelproperty_scripts_inactive)
-            ik_script = self.sim.getScript(self.sim.scripttype_simulation, self.sim.getObject(f"/{self.robot_name}"))
-            if ik_script == -1:
-                ik_script = self.sim.getScript(self.sim.scripttype_customization, self.sim.getObject(f"/{self.robot_name}"))
-
-            self.sim.setObjectInt32Param(ik_script, self.sim.scriptintparam_enabled, 0)
-
-            time.sleep(0.01)
-
-            self.sim_start()
-
-            # -- if set to true, we will draw the path in the simulation:
-            if draw_path: drawn_object = self.sim.callScriptFunction('visualizePath', ompl_script, path, [0.0, 1.0, 0.0])
-
-            if ignore_dynamics:
-                for obj in self.objects_in_sim:
-                    obj_handle = self.sim.getObject(f"/{obj}", {"noError": True})
-                    if obj_handle != -1:
-                        self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_static, 1)
-                        self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_respondable, 1)
-                        self.sim.resetDynamicObject(obj_handle)
-
-            time.sleep(0.01)
-
-            if motion_method != "moveToConfig":
-                # -- use a cubic spline to interpolate time points:
-                cs = CubicSpline(
-                    [0, 0.3, 0.5, 0.8, 1],
-                    [float('2.5e-3'), float('2.0e-3'), float('1.0e-3'), float('2.0e-3'), float('2.5e-3')]
-                )
-                xs = np.arange(0, 1, 1/len(path))
-                time_points = cs(xs)
-
-                # -- with the computed path, we will gradually change the configuration of the robot:
-                for P in range(len(path)):
-                    self.sim.callScriptFunction('setConfig_python', ompl_script, path[P])
-                    time.sleep(time_points[P])
-            else:
-                self.move_to_configs(path)
-
-            time.sleep(0.01)
-
-            if ignore_dynamics:
-                for obj in self.objects_in_sim:
-                    obj_handle = self.sim.getObject(f"/{obj}", {"noError": True})
-                    if obj_handle != -1:
-                        self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_static, 0)
-                        self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_respondable, 1)
-
-            # -- we need to re-enable the IK following done by the "target" dummy of the robot:
-            self.sim.setObjectPosition(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObjectPosition(self.sim.getObject(f'/{self.robot_name}/tip')), -1)
-            self.sim.setObjectOrientation(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObjectOrientation(self.sim.getObject(f'/{self.robot_name}/tip')), -1)
-            self.sim.setObjectInt32Param(ik_script, self.sim.scriptintparam_enabled, 1)
-            if draw_path: self.sim.removeDrawingObject(drawn_object)
-
-        else:
-            self.sim.addLog(self.sim.verbosity_default, f'[FOON-TAMP]: plan not found!')
+        time.sleep(0.001)
 
         # -- remove the OMPL target object:
         self.sim.removeObjects([self.sim.getObject('/OMPL_target')])
 
-        return bool(path)
+        self.sim.addLog(self.sim.verbosity_default, f'[FOON-TAMP]: plan{" not" if not bool(path) else ""} found!')
+
+        return path
+
+    def ompl_execute(
+            self,
+            target_object: str,
+            target_pose: list[float],
+            ompl_args: dict = {},
+            draw_path: bool = True,
+            ignore_dynamics: bool = False,
+        ) -> bool:
+
+        path = self.ompl_compute(
+            target_pose=target_pose,
+            target_object=target_object,
+            ompl_args=ompl_args,
+        )
+
+        if not bool(path): return False
+
+        time.sleep(0.01)
+
+        self.sim_start()
+
+        # -- if set to true, we will draw the path in the simulation:
+        if draw_path: drawn_object = self.sim.callScriptFunction('visualizePath', self.ompl_script, path, [0.0, 1.0, 0.0])
+
+        if ignore_dynamics:
+            for obj in self.objects_in_sim:
+                obj_handle = self.sim.getObject(f"/{obj}", {"noError": True})
+                if obj_handle != -1:
+                    self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_static, 1)
+                    self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_respondable, 1)
+                    self.sim.resetDynamicObject(obj_handle)
+
+        time.sleep(0.01)
+
+        self.move_to_configs(path)
+
+        time.sleep(0.01)
+
+        if ignore_dynamics:
+            for obj in self.objects_in_sim:
+                obj_handle = self.sim.getObject(f"/{obj}", {"noError": True})
+                if obj_handle != -1:
+                    self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_static, 0)
+                    self.sim.setObjectInt32Parameter(obj_handle, self.sim.shapeintparam_respondable, 1)
+
+        if draw_path: self.sim.removeDrawingObject(drawn_object)
+
+        return True
 
     def move_to_configs(self, path: list[float]):
+
+        # -- we need to disable the IK following done by the "target" dummy of the robot:
+        # self.sim.setModelProperty(target, self.sim.modelproperty_scripts_inactive)
+        ik_script = self.sim.getScript(self.sim.scripttype_simulation, self.sim.getObject(f"/{self.robot_name}"))
+        if ik_script == -1:
+            ik_script = self.sim.getScript(self.sim.scripttype_customization, self.sim.getObject(f"/{self.robot_name}"))
+
+        self.sim.setObjectInt32Param(ik_script, self.sim.scriptintparam_enabled, 0)
+
         # NOTE: check the sim.moveToConfig() docs here: https://manual.coppeliarobotics.com/en/regularApi/simMoveToConfig.htm
         vel = 120
         accel = 120
@@ -1012,7 +1016,6 @@ class Interfacer():
         robot_collection = self.sim.createCollection()
         self.sim.addItemToCollection(robot_collection, self.sim.handle_tree, self.sim.getObject(f'/{self.robot_name}'), 0)
 
-
         # -- change the simulation setting to stepping mode for threaded/non-blocking execution:
         self.sim.setStepping(True)
         self.sim.step()
@@ -1028,7 +1031,8 @@ class Interfacer():
                 # 'maxJerk': maxJerk,
             }
             self.sim.moveToConfig(params)
-            is_collision, handles = self.sim.checkCollision(robot_collection,robot_collection)
+
+            # is_collision, handles = self.sim.checkCollision(robot_collection,robot_collection)
             # if bool(is_collision) and handles[0] != handles[1]:
             #     print(f"TEST: there is a collision between {self.sim.getObjectAlias(handles[0])} and {self.sim.getObjectAlias(handles[1])}!")
 
@@ -1037,10 +1041,16 @@ class Interfacer():
         # -- turn off stepping mode since we don't need it beyond this point:
         self.sim.setStepping(False)
 
+        # -- we need to re-enable the IK following done by the "target" dummy of the robot:
+        self.sim.setObjectPosition(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObjectPosition(self.sim.getObject(f'/{self.robot_name}/tip')), -1)
+        self.sim.setObjectOrientation(self.sim.getObject(f'/{self.robot_name}/target'), self.sim.getObjectOrientation(self.sim.getObject(f'/{self.robot_name}/tip')), -1)
+        self.sim.setObjectInt32Param(ik_script, self.sim.scriptintparam_enabled, 1)
+
+
     def return_home(self, method: int = 1):
         # -- return back to starting position:
         if method == 1:
-            self.ompl_path_planning(target_object=None, goal_pose=self.start_pose, )
+            self.ompl_execute(target_object=None, target_pose=self.start_pose, )
         else:
             self.spline_path_planning(self.start_pose)
 
@@ -1161,13 +1171,13 @@ class Interfacer():
         # -- we will try to find configs with OMPL and find a collision-avoiding plan up to a certain number of times
         for _ in range(3 if target_object in ['table', 'worksurface'] else 1):
             # -- we will be generous and allow three attempts at finding an empty place on the table:
-            goal_poses = self.ompl_find_pose(target_object)
+            goal_poses = self.ompl_get_target_pose(target_object)
 
             goal_achieved = False
             for goal in goal_poses:
                 if method == 1:
                     # -- use the OMPL-based path planning method:
-                    success = self.ompl_path_planning(
+                    success = self.ompl_compute(
                         target_object,
                         goal,
                         ompl_args,
@@ -1281,7 +1291,7 @@ class Interfacer():
                     # NOTE: here's how we decide on the goal pose:
                     # -- if we want to place, then we use the *post-grasp* given by UTAMP
                     # -- if we want to pick , then we use the *pre-grasp* given by UTAMP
-                    success = self.ompl_path_planning(
+                    success = self.ompl_compute(
                         None,
                         (post_grasp if gripper_action == 0 else pre_grasp),
                         algorithm,
@@ -1390,6 +1400,8 @@ class Interfacer():
             affordance: str = 'pick-top',
         ):
 
+        print("-- executing 'pick' action...")
+
         start_time = time.time()
 
         goal_achieved = False
@@ -1397,11 +1409,11 @@ class Interfacer():
         # -- we will try to find configs with OMPL and find a collision-avoiding plan up to a certain number of times
         for _ in range(3 if target_object in ['table', 'worksurface'] else 1):
             # -- we will be generous and allow three attempts at finding an empty place on the table:
-            goal_poses = self.ompl_find_pose(target_object, affordance)
+            goal_poses = self.ompl_get_target_pose(target_object, affordance)
 
             for G in range(len(goal_poses)):
                 # -- use the OMPL-based path planning method:
-                success = self.ompl_path_planning(
+                success = self.ompl_execute(
                     target_object,
                     goal_poses[G],
                     dict(ompl_args),
@@ -1447,12 +1459,14 @@ class Interfacer():
             self.execute_trajectory(traj_move_up)
 
             if target_object in self.sim.getObjectAlias(obj_in_hand):
-            # -- this means that we have successfully grasped the intended object:
-                return True
+                # -- this means that we have successfully grasped the intended object:
+                success = True
 
-        print(f'\t-- total time: {time.time() - start_time}')
+        else: success = False
 
-        return False
+        print(f'\t-- total execution time: {time.time() - start_time}')
+
+        return success
 
     def place(
             self,
@@ -1460,6 +1474,8 @@ class Interfacer():
             ompl_args: dict = {},
             affordance: str = 'place-top',
         ):
+
+        print("-- executing 'place' action...")
 
         start_time = time.time()
 
@@ -1471,11 +1487,11 @@ class Interfacer():
         # -- we will try to find configs with OMPL and find a collision-avoiding plan up to a certain number of times
         for _ in range(3 if target_object in ['table', 'worksurface'] else 1):
             # -- we will be generous and allow three attempts at finding an empty place on the table:
-            goal_poses = self.ompl_find_pose(target_object, affordance)
+            goal_poses = self.ompl_get_target_pose(target_object, affordance)
 
             for goal in goal_poses:
                 # -- use the OMPL-based path planning method:
-                success = self.ompl_path_planning(
+                success = self.ompl_execute(
                     target_object,
                     goal,
                     ompl_args,
@@ -1523,9 +1539,9 @@ class Interfacer():
 
         # -- now, we need to find a path for pre-pouring:
         while True:
-            result = self.ompl_path_planning(
+            result = self.ompl_execute(
                 target_object=target_container,
-                goal_pose=self.ompl_find_pose(
+                goal_pose=self.ompl_get_target_pose(
                     target_object=target_container,
                     affordance='pour',
                 )[0],

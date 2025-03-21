@@ -26,6 +26,71 @@ configs = {
 algorithm = 'astar'
 heuristic = 0
 
+
+class PlanningOperator(object):
+
+    def __init__(self, PO_name=None):
+        self.name = PO_name
+        self.preconditions = []
+        self.effects = []
+        self.parameters = {}
+        self.args = []
+
+    def addParameter(self, variable, type):
+        self.parameters[variable] = type
+        self.args.append(variable)
+
+    def addPrecondition(self, pred):
+        self.preconditions.append(pred)
+
+    def addEffect(self, pred):
+        self.effects.append(pred)
+
+    def getPreconditions(self):
+        return self.preconditions
+
+    def getEffects(self):
+        return self.effects
+
+    def getParameters(self):
+        return self.parameters, self.args
+
+    def getActionName(self):
+        return self.name
+
+    def printPlanningOperator(self):
+        if self.name:
+            print('(:action ' + self.name)
+
+            # -- print parameters for the planning operator:
+            if bool(len(self.args)):
+                print('\t:parameters (')
+                for P in self.args:
+                    print('\t\t' + str(P) + ' - ' + str(self.parameters[P]))
+                print('\t)')
+            else:
+                print('\t:parameters ( )')
+
+            # -- print preconditions..
+            print('\t:precondition (and ')
+            for pred in self.preconditions:
+                if isinstance(pred, list):
+                    # -- this is an *or* statement:
+                    print('\t\t(or')
+                    for subpred in pred:
+                        print('\t\t\t' + subpred)
+                    print('\t\t)')
+                else:
+                    print('\t\t' + pred)
+            print('\t)')
+
+            # -- print effects..
+            print('\t:effect (and')
+            for pred in self.effects:
+                print('\t\t' + pred)
+            print('\t)')
+
+
 def create_domain_file(
         objects_in_sim: list,
         micro_fpath: str,
@@ -358,3 +423,116 @@ def solve(
         return False
 
     return False
+
+
+def parse_domain_file(file_name):
+    # NOTE: this function is used to parse a domain file with any type of planning operator.
+
+    # -- this function adds them all to a list, and then return them to the main function.
+    domain_file = list(open(file_name, 'r'))
+
+    # -- a list of planning operators will be returned:
+    planning_operators = []
+
+    # -- variable name for newly creating PO instance:
+    new_planning_operator = None
+
+    for x in range(len(domain_file)):
+
+        line = [L for L in domain_file[x].split('\t') if L != ''][0].strip()
+
+        if line.startswith(';'):
+            # -- this is a comment; just ignore:
+            pass
+
+        elif line.startswith('(:action'):
+            # -- this is the beginning of a planning operator (action) from PDDL file:
+            macro_PO_name = line.split(' ')[1]
+
+            # -- create new temp planning operator instance and add to list:
+            new_planning_operator = PlanningOperator(macro_PO_name)
+            planning_operators.append(new_planning_operator)
+
+        elif line.startswith(':parameters') and not line.endswith(')'):
+            # -- this is the beginning of the definition of parameters for this PO:
+            x += 1
+
+            while True:
+                line = [L for L in domain_file[x].split('\t') if L != ''][0].strip()
+                if line.startswith(')'):
+                    break
+
+                # -- splitting each line of a parameter based on variable name and type:
+                parameter_parts = [X for X in line.split(' ') if X != '-']
+
+                # -- skip any comments or new-lines on the domain file POs:
+                if not line.startswith(';') and len(parameter_parts) == 2:
+                    # -- save the parameter to the new planning operator object:
+                    new_planning_operator.addParameter(variable=parameter_parts[0], type=parameter_parts[1])
+
+                x += 1
+
+        elif line.startswith(':precondition'):
+            # -- this is where we start reading the preconditions of the planning operator:
+            x += 1
+
+            while True:
+                line = [L for L in domain_file[x].split('\t') if L != ''][0].strip()
+                if line.startswith(')'):
+                    break
+
+                # -- remember that a predicate will be of the form: <relation> <obj1> <obj2>
+                new_predicate = line
+
+                # -- skip any comments or new-lines on the domain file POs:
+                if not line.startswith(';') and line.startswith('('):
+                    # -- we need to check for potential *OR* operators in the preconditions:
+                    if line.startswith('(or'):
+                        # -- we will treat an *or* structure as a single precondition list with its arguments:
+                        or_predicates = []
+
+                        x += 1
+                        while True:
+                            # -- properly tokenize and clean up the line:
+                            line = [L for L in domain_file[x].split('\t') if L != ''][0].strip()
+                            if line.startswith(')'):
+                                break
+                            x += 1
+
+                            or_predicates.append(line)
+
+                        # -- add the list of or-predicates to the list of preconditions:
+                        new_planning_operator.addPrecondition(or_predicates)
+                    else:
+                        # -- just add this predicate as normal:
+                        new_planning_operator.addPrecondition(new_predicate)
+
+                # -- move onto the next line of the file:
+                x += 1
+
+        elif line.startswith(':effect'):
+            # -- this is where we start reading the effects (post-conditions) of the planning operator:
+            x += 1
+
+            while True:
+                line = [L for L in domain_file[x].split('\t') if L != ''][0].strip()
+                if line.startswith(')'):
+                    break
+
+                # -- remember that a predicate will be of the form: <relation> <obj1> <obj2>
+                new_predicate = line
+
+                # -- skip any comments or new-lines on the domain file POs:
+                if not line.startswith(';') and line.startswith('('):
+                    new_planning_operator.addEffect(new_predicate)
+
+                # -- move onto the next line of the file:
+                x += 1
+
+        else:
+            pass
+
+    #endfor
+
+    return planning_operators
+#enddef

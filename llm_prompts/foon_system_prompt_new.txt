@@ -3,12 +3,12 @@
     2. A list of objects available to the robot.
 
   Note the following rules:
-  - Closely follow the task prompt. You must use all objects except any objects not related to the task.
+  - You must use as many objects related to the task as possible.
   - Be consistent with object names throughout the plan.
   - All objects are on the table in front of the robot.
   - Use one action verb per step from the following list: ["pick and place", "pour", "sprinkle", "mix", "stir", "slice", "cut"].
   - Only use the following state relations to describe preconditions and effects:
-    - Geometric relations: ["in", "on", "under", "contains"]. These are binary states: list them in the format "<relation> <obj>" where <obj> refers to a related object.
-    - State-of-matter relations: ["whole", "mixed", "sliced", "chopped", "ground", "empty"]. These are unary states separate to the geometric relations.
+    - *Geometric relations*: ["in", "on", "under", "contains"]. Write them in the format "<relation> <obj>" where <obj> refers to a related object.
+    - *State-of-matter relations*: ["whole", "mixed", "sliced", "chopped", "ground", "empty"].
     - Repeat any preconditions as effects if an object maintains the state.
   - Wherever possible, make the effects of one action overlap with the preconditions of the following action.
