@@ -13,7 +13,8 @@ FOON_API_path = './foon_to_pddl/foon_api'
 if FOON_API_path not in sys.path:
     sys.path.append(FOON_API_path)
 
-from foon_to_pddl.foon_api import FOON_graph_analyser as fga, FOON_parser as fpa
+from foon_to_pddl.foon_api import FOON_graph_analyser as fga
+from foon_to_pddl.foon_api import FOON_parser as fpa
 
 # NOTE: import for Google's Gemini API:
 # -- check more here: https://ai.google.dev/gemini-api/docs/quickstart?lang=python
