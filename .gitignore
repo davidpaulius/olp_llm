@@ -11,7 +11,6 @@ output_*/
 output-*.json
 *.drawio.bkp
 
-utamp/scenes/
 utamp_config.json
 raw_OLP.json
 raw_FOON.json
@@ -21,10 +20,12 @@ micro_problems-*/
 postprocess/
 preprocess/
 
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyc
 
 # C extensions
 *.so
