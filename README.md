@@ -18,6 +18,7 @@ There are several submodules that will be added to this directory:
 2. **[OMPLement](https://github.com/davidpaulius/OMPLement)**: this is a small library I wrote to simplify OMPL-based motion planning with CoppeliaSim.
 3. **[downward](https://github.com/aibasel/downward)**: this is the [Fast-Downward](https://www.fast-downward.org/) automated planner.
     - You **must** build this solver prior to use. Follow the instructions [here](https://github.com/aibasel/downward/blob/main/BUILD.md) on how to do so.
+    - If you already have Fast-Downward installed on your machine, you can simply modify the path to its location in the [pddl_planning..p](pddl_planning.py) file (line 9).
 
 ### II. CoppeliaSim
 
