@@ -13,6 +13,12 @@ git clone https://github.com/davidpaulius/olp_llm --recursive
 git submodule update --remote --merge --recursive
 ```
 
+There are several submodules that will be added to this directory:
+1. [foon_to_pddl[(https://github.com/davidpaulius/foon_to_pddl)] -- this is needed to translate object-level plans (as FOONs) into PDDL as well as do other miscellaneous stuff with the generated graph.
+2. [OMPLement](https://github.com/davidpaulius/OMPLement) -- this is a small library I wrote to simplify OMPL planning with CoppeliaSim
+3. [fast-downward](https://github.com/aibasel/downward) -- this is the Fast-Downward automated planner.
+  - You **must** build this solver prior to use. Follow the instructions [here](https://github.com/aibasel/downward/blob/main/BUILD.md) on how to do so.
+
 ### II. CoppeliaSim
 
 You will need to download the [CoppeliaSim simulator](https://www.coppeliarobotics.com/) and set up its [Python API](https://manual.coppeliarobotics.com/en/remoteApiOverview.htm) using the following 	``pip`` command:

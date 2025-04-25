@@ -625,7 +625,8 @@
                             },
                             "second block": {
                                 "preconditions": [
-                                    "on table"
+                                    "on table",
+                                    "under nothing"
                                 ],
                                 "effects": [
                                     "on first block",
@@ -655,7 +656,8 @@
                             },
                             "third block": {
                                 "preconditions": [
-                                    "on table"
+                                    "on table",
+                                    "under nothing"
                                 ],
                                 "effects": [
                                     "on second block",
@@ -700,7 +702,8 @@
                         "object_states": {
                             "'A' block": {
                                 "preconditions": [
-                                    "on table"
+                                    "on table",
+                                    "under nothing"
                                 ],
                                 "effects": [
                                     "on 'B' block",
@@ -740,7 +743,8 @@
                             },
                             "'C' block": {
                                 "preconditions": [
-                                    "on table"
+                                    "on table",
+                                    "under nothing"
                                 ],
                                 "effects": [
                                     "on 'A' block",

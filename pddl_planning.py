@@ -1,18 +1,13 @@
 
 import os
 import subprocess
+import argparse
 from pathlib import Path
 
-# NOTE: make sure you define the path to where the planners are located on your machine:
-# -- paths to the different planners on my PC:
-path_to_planners = {}
-if os.name == 'nt':
-    # -- this is the path to the planners on the Windows side:
-    path_to_planners['PDDL4J'] = 'D:/PDDL4J/pddl4j-3.8.3.jar'
-    path_to_planners['fast-downward'] = 'C:/Users/david/fast-downward-23.06/fast-downward.py'
-else:
-    # -- this is the path to the planners on the Ubuntu side:
-    path_to_planners['fast-downward'] = '/media/master_oogway/ESD-ISO/ICRA-25/fast-downward-22.12/fast-downward.py'
+# NOTE: make sure that fast-downward submodule is pulled and built:
+path_to_planners = {
+    'fast-downward': './downward/fast-downward.py'
+}
 
 planner_to_use = 'fast-downward'
 
@@ -348,14 +343,14 @@ def create_problem_file(
         # print(f'\n\n{grounded_goals}\n\n')
 
         # -- checking to see if there are any contradictions:
-        for pred1 in grounded_goals['neg']:
-            is_contradiction = False
-            for pred2 in grounded_goals['reg']:
-                is_contradiction = str(pred2).strip() in pred1
-                if is_contradiction: break
+        # for pred1 in grounded_goals['neg']:
+        #     is_contradiction = False
+        #     for pred2 in grounded_goals['reg']:
+        #         is_contradiction = str(pred2).strip() in pred1
+        #         if is_contradiction: break
 
-            if not is_contradiction:
-                pddl_file.write(pred1)
+        #     if not is_contradiction:
+        #         pddl_file.write(pred1)
 
 
         pddl_file.write('))\n')
@@ -536,3 +531,28 @@ def parse_domain_file(file_name):
 
     return planning_operators
 #enddef
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--problem",
+        type=str,
+        default=None,
+        help="This specifies the PDDL problem file.",
+    )
+
+    parser.add_argument(
+        "--domain",
+        type=str,
+        default=None,
+        help="This specifies the PDDL domain file.",
+    )
+
+    args = parser.parse_args()
+
+    if args.problem and args.domain:
+        find_plan(
+            problem_file=args.problem,
+            domain_file=args.domain,
+        )

@@ -5,3 +5,6 @@
 [submodule "OMPLement"]
 	path = OMPLement
 	url = https://github.com/davidpaulius/OMPLement
+[submodule "downward"]
+	path = downward
+	url = https://github.com/aibasel/downward
