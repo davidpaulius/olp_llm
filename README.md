@@ -1,4 +1,4 @@
-# olp_llm: Bootstrapping Object-Level Planning with Large Language Models
+# olp_llm: Code for "Bootstrapping Object-Level Planning with Large Language Models"
 
 **NOTE:** This code is for the ICRA 2025 paper entitled ["Bootstrapping Object-Level Planning with Large Language Models"](https://davidpaulius.github.io/olp_llm) (Authors: David Paulius, Alejandro Agostini, Benedict Quartey, and George Konidaris).
 
@@ -14,10 +14,10 @@ git submodule update --remote --merge --recursive
 ```
 
 There are several submodules that will be added to this directory:
-1. [foon_to_pddl[(https://github.com/davidpaulius/foon_to_pddl)] -- this is needed to translate object-level plans (as FOONs) into PDDL as well as do other miscellaneous stuff with the generated graph.
-2. [OMPLement](https://github.com/davidpaulius/OMPLement) -- this is a small library I wrote to simplify OMPL planning with CoppeliaSim
-3. [fast-downward](https://github.com/aibasel/downward) -- this is the Fast-Downward automated planner.
-  - You **must** build this solver prior to use. Follow the instructions [here](https://github.com/aibasel/downward/blob/main/BUILD.md) on how to do so.
+1. **[foon_to_pddl](https://github.com/davidpaulius/foon_to_pddl)**:- this library helps to manage certain functions for FOON object-level plans.
+2. **[OMPLement](https://github.com/davidpaulius/OMPLement)**: this is a small library I wrote to simplify OMPL-based motion planning with CoppeliaSim.
+3. **[downward](https://github.com/aibasel/downward)**: this is the [Fast-Downward](https://www.fast-downward.org/) automated planner.
+    - You **must** build this solver prior to use. Follow the instructions [here](https://github.com/aibasel/downward/blob/main/BUILD.md) on how to do so.
 
 ### II. CoppeliaSim
 
@@ -36,7 +36,7 @@ pip3 install -r requirements.txt
 ## How to Run
 
 Simply run the Jupyter Notebook script named [``ICRA25_pipeline.py``](ICRA25_pipeline.py) once you have set everything up as above. You can change the task setting by modifying the code as well as set the OpenAI GPT model of your choice.
-
+- Check out the [OpenAI API documentation](https://platform.openai.com/docs/overview) page for information on the kinds of models available for use and other details.
 
 ## Further Details on OMPL in CoppeliaSim
 
